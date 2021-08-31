@@ -5,28 +5,19 @@ using ColossalFramework.Math;
 using System.Text;
 using System;
 using UnityEngine;
+using System.Collections.Generic;
+using System.Linq;
 
 namespace ParkingLotSnapping
 {
     class ParkingSpaceAssetAI : DummyBuildingAI
     {
-        [CustomizableProperty("Symmetrical", "Parking Space Asset")]
-        public bool m_symmetrical = true;
-
-        [CustomizableProperty("Spaces", "Parking Space Asset")]
-        public int m_spaces = 1;
-
-        [CustomizableProperty("Rows", "Parking Space Asset")]
-        public int m_rows = 2;
-
-        [CustomizableProperty("Aisles", "Parking Space Asset")]
-        public int m_aisles = 1;
-
         [CustomizableProperty("Offset", "Parking Space Asset")]
         public float m_offset = 0f;
 
-        [CustomizableProperty("Rotation", "Parking Space Asset")]
-        public int m_rotation = 0;
+
+        [CustomizableProperty("ParkingWidth", "Parking Space Asset")]
+        public float m_parkingWidth = 0;
 
         public override bool IgnoreBuildingCollision()
         {
@@ -54,41 +45,141 @@ namespace ParkingLotSnapping
             Building currentBuilding = BuildingManager.instance.m_buildings.m_buffer[buildingID];
             currentBuilding.Info.m_autoRemove = true;
             currentBuilding.Info.m_placementMode = BuildingInfo.PlacementMode.OnTerrain;
+            if (ParkingSpaceGrid.areYouAwake() == false)
+            {
+                ParkingSpaceGrid.Awake();
+            }
+            ushort overlappedPSA = ParkingSpaceGrid.CheckGrid(currentBuilding.m_position);
+            if (overlappedPSA != 0 && ModSettings.OverrideOverlapping) {
+                try
+                {
+                    BuildingManager.instance.ReleaseBuilding(overlappedPSA);
+                } catch(Exception e)
+                {
+                    Debug.Log("[PLS].ParkingSpaceAssetAI.CreateBuilding Tried to remove building " + overlappedPSA + " but encountered exception " + e.ToString());
+                }
+            }
+            ParkingSpaceGrid.AddToGrid(buildingID);
+            if (!PositionLocking.IsLocked() && ModSettings.AllowLocking)
+            {
+                try
+                {
+                    NetSegment lastSnappedSegment = NetManager.instance.m_segments.m_buffer[PositionLocking.GetLastSnappedSegmentID()];
+                    if (lastSnappedSegment.IsStraight())
+                    {
+                        PositionLocking.InitiateLock(this.m_parkingWidth);
+                    }
+                }catch (Exception e)
+                {
+                    Debug.Log("[PLS].ParkingSpaceAssetAI.CreateBuilding Couldn't lock encoutnred exception " + e.ToString());
+                }
+                //Debug.Log("[PLS]PSAai CreateBuilding Initiating lock for asset named " + this.name);
+            }
+            else
+            {
+                PositionLocking.AddParkingSpaceAsset(this.m_parkingWidth);
+                //Debug.Log("[PLS]PSAai CreateBuilding adding link in PSA chain!");
+            }
+
+            if (!Undo.areYouAwake()) Undo.Awake();
+            Undo.addLotToStack(buildingID);
+
             base.CreateBuilding(buildingID, ref data);
 
+        }
+        public override void ReleaseBuilding(ushort buildingID, ref Building data)
+        {
+            if (ParkingSpaceGrid.areYouAwake() == false)
+            {
+                ParkingSpaceGrid.Awake();
+            }
+            try
+            {
+                ParkingSpaceGrid.RemoveFromGrid(buildingID);
+            } catch (Exception e)
+            {
+                Debug.Log("[PLS].ParkingSpaceAssetAi.ReleaseBuilding Tried to remove Building from grid " + buildingID + " but encountered exception " + e.ToString());
+            }
+
+            if (!Undo.areYouAwake()) Undo.Awake();
+            Undo.removeLotFromStack(buildingID); // This function will be called either by manual removal (bulldoze) or called by the Undo.releaseLastBuilding
+
+            base.ReleaseBuilding(buildingID, ref data);
         }
         public override ToolBase.ToolErrors CheckBuildPosition(ushort relocateID, ref Vector3 position, ref float angle, float waterHeight, float elevation, ref Segment3 connectionSegment, out int productionRate, out int constructionCost)
         {
             Vector3 finalPosition;
             Vector3 finalAngle;
+            finalPosition = Vector3.forward;
             Building currentBuilding = BuildingManager.instance.m_buildings.m_buffer[relocateID];
             currentBuilding.Info.m_placementMode = BuildingInfo.PlacementMode.OnTerrain;
             BuildingInfo info = currentBuilding.Info;
-           
-            if (this.m_symmetrical == true || this.m_offset == 0f)
+            if (ParkingSpaceGrid.areYouAwake() == false)
             {
-                if (this.SnapToRoad(position, out finalPosition, out finalAngle, 20f, currentBuilding))
+                ParkingSpaceGrid.Awake();
+            }
+            // KEYBIND: Check if unlock keybind (whichever it is currently) is pressed
+            if (ModSettings.AllowLocking != true && PositionLocking.IsLocked() || ModSettings.AllowSnapping != true && PositionLocking.IsLocked() || ModSettings.UnlockKeybind.IsPressed() && PositionLocking.IsLocked())
+            {
+                PositionLocking.DisengageLock();
+            }
+            // KEYBIND: Check if return keybind (whichever it is currently) is pressed
+            if (PositionLocking.canReturnToPreviousLockPosition() == true && ModSettings.ReturnLockKeybind.IsPressed())
+            {
+                PositionLocking.returnToPreviousLockPosition();
+            }
+            if (ModSettings.AllowSnapping)
+            {
+                if (this.m_offset == 0f)
                 {
-                    
-                    angle = Mathf.Atan2(finalAngle.x, -finalAngle.z);
-                    position.x = finalPosition.x;
-                    position.z = finalPosition.z;
-                    
-                    
+                    float snapDistance = (float)ModSettings.SnappingDistance;
+                    if (PositionLocking.IsLocked())
+                    {
+                        snapDistance = (float)ModSettings.UnlockingDistance;
+                    }
+                    if (this.SnapToRoad(position, out finalPosition, out finalAngle, snapDistance, currentBuilding))
+                    {
+
+                        angle = Mathf.Atan2(finalAngle.x, -finalAngle.z);
+                        position.x = finalPosition.x;
+                        position.z = finalPosition.z;
+
+
+                    }
+                    else if (PositionLocking.IsLocked())
+                    {
+                        PositionLocking.DisengageLock();
+                    }
                 }
-            } else if (this.m_symmetrical == false && this.m_offset != 0f)
-            {
-                if (this.SnapToOneSide(position, out finalPosition, out finalAngle, 20f))
+                else
                 {
-                    angle = Mathf.Atan2(finalAngle.x, -finalAngle.z);
-                    position.x = finalPosition.x;
-                    position.z = finalPosition.z;
+                    float snapDistance = (float)ModSettings.SnappingDistance;
+                    if (PositionLocking.IsLocked())
+                    {
+                        snapDistance = (float)ModSettings.UnlockingDistance;
+                    }
+                    if (this.SnapToOneSide(position, out finalPosition, out finalAngle, snapDistance))
+                    {
+                        angle = Mathf.Atan2(finalAngle.x, -finalAngle.z);
+                        position.x = finalPosition.x;
+                        position.z = finalPosition.z;
+                    }
+                    else if (PositionLocking.IsLocked())
+                    {
+                        PositionLocking.DisengageLock();
+                    }
                 }
             }
-            
             bool flag;
             this.GetConstructionCost(relocateID != 0, out constructionCost, out flag);
             productionRate = 0;
+            if (PositionLocking.IsLocked() == true && ParkingSpaceGrid.CheckGrid(finalPosition) != 0)
+            {
+                PositionLocking.SetOverlapping(true);
+            } else
+            {
+                PositionLocking.SetOverlapping(false);
+            }
             return ToolBase.ToolErrors.None;
         }
         private bool SnapToRoad(Vector3 refPos, out Vector3 pos, out Vector3 dir, float maxDistance, Building currentBuilding)
@@ -96,17 +187,22 @@ namespace ParkingLotSnapping
             bool result = false;
             pos = refPos;
             dir = Vector3.forward;
-            float minX = refPos.x - maxDistance - 100f;
-            float minZ = refPos.z - maxDistance - 100f;
-            float maxX = refPos.x + maxDistance + 100f;
-            float maxZ = refPos.z + maxDistance + 100f;
+            float additionalDistance = 100f;
+            float minX = refPos.x - maxDistance - additionalDistance;
+            float minZ = refPos.z - maxDistance - additionalDistance;
+            float maxX = refPos.x + maxDistance + additionalDistance;
+            float maxZ = refPos.z + maxDistance + additionalDistance;
             int minXint = Mathf.Max((int)(minX / 64f + 135f), 0);
             int minZint = Mathf.Max((int)(minZ / 64f + 135f), 0);
             int maxXint = Mathf.Max((int)(maxX / 64f + 135f), 269);
             int maxZint = Mathf.Max((int)(maxZ / 64f + 135f), 269);
-            
+            Vector3 centerPos = new Vector3();
+            Vector3 centerDirection = Vector3.forward;
+            int snappedSegmentID = 0;
+            NetInfo info = new NetInfo();
             Array16<NetSegment> segments = Singleton<NetManager>.instance.m_segments;
             ushort[] segmentGrid = Singleton<NetManager>.instance.m_segmentGrid;
+            float potentialMaxDistance = maxDistance;
             for (int i = minZint; i <= maxZint; i++)
             {
                 for (int j = minXint; j <= maxXint; j++)
@@ -118,113 +214,26 @@ namespace ParkingLotSnapping
                         NetSegment.Flags flags = segments.m_buffer[(int)segmentGridZX].m_flags;
                         if ((flags & (NetSegment.Flags.Created | NetSegment.Flags.Deleted)) == NetSegment.Flags.Created)
                         {
-                            NetInfo info = segments.m_buffer[(int)segmentGridZX].Info;
-                            if (info.m_class.m_service == ItemClass.Service.Road)
+                            NetInfo potentialInfo = segments.m_buffer[(int)segmentGridZX].Info;
+                            if (ModSettings.PLRCustomProperties.ContainsKey(potentialInfo.name))
                             {
                                 Vector3 min = segments.m_buffer[(int)segmentGridZX].m_bounds.min;
                                 Vector3 max = segments.m_buffer[(int)segmentGridZX].m_bounds.max;
                                 if (min.x < maxX && min.z < maxZ && max.x > minX && max.z > minZ)
                                 {
-                                    Vector3 centerPos;
-                                    Vector3 centerDirection;
-                                    segments.m_buffer[(int)segmentGridZX].GetClosestPositionAndDirection(refPos, out centerPos, out centerDirection);
-                                    
-                                    float distanceToRoad = Vector3.Distance(centerPos, refPos) - info.m_halfWidth;
+                                    Vector3 potentialCenterPos;
+                                    Vector3 potentialCenterDirection;
+                                    segments.m_buffer[(int)segmentGridZX].GetClosestPositionAndDirection(refPos, out potentialCenterPos, out potentialCenterDirection);
+                                    float distanceToRoad = Vector3.Distance(potentialCenterPos, refPos) - potentialInfo.m_halfWidth;
                                     //Debug.Log("[APL].PSAAI.Snap to Road info.lanes = " + info.m_lanes.Length.ToString());
                                     //Debug.Log("[APL].PSAAI.Snap to Road info.m_halfwidth = " + info.m_halfWidth.ToString());
-                                    if (distanceToRoad < maxDistance)
+                                    if (distanceToRoad < potentialMaxDistance && ModSettings.PLRCustomProperties.ContainsKey(potentialInfo.name))
                                     {
-                                        
-                                        Vector3 vector2 = new Vector3(centerDirection.z, 0f, -centerDirection.x);
-                                        dir = vector2.normalized;
-                                        if (Vector3.Dot(centerPos - refPos, dir) < 0f)
-                                        {
-                                            dir = -dir;
-                                        }
-                                       
-                                        if (info.m_halfWidth == 20 || info.m_lanes.Length == 9)
-                                        {
-                                            if (this.m_rotation == 0 || this.m_rotation == 180)
-                                            {
-                                                if (Vector3.Dot(centerPos - refPos, dir) > 0f)
-                                                {
-                                                    if (this.m_rotation == 0)
-                                                        dir = -dir;
-                                                }
-                                            }
-                                            else if (this.m_rotation == 90 || this.m_rotation == 270)
-                                            {
-                                                if (Vector3.Dot(centerPos - refPos, dir) > 0f)
-                                                {
-                                                    if (this.m_rotation == 90)
-                                                        dir = -dir;
-                                                }
-                                            }
-                                            Vector3 centerDirectionNormalized = centerDirection.normalized;
-                                            if (Vector3.Dot(centerPos - refPos, dir) < 0f)
-                                            {
-                                                pos = centerPos + dir * (9f);
-                                            }
-                                            else
-                                            {
-                                                pos = centerPos - dir * (9f);
-                                            }
-                                        } else if (info.m_halfWidth == 29 || info.m_lanes.Length == 13)
-                                        {
-                                            pos = centerPos;
-                                            if (this.m_rotation == 0 || this.m_rotation == 180)
-                                            {
-                                                if (Vector3.Dot(centerPos - refPos, dir) > 0f)
-                                                {
-                                                    if (this.m_rotation == 0)
-                                                        dir = -dir;
-                                                }
-                                            }
-                                            else if (this.m_rotation == 90 || this.m_rotation == 270)
-                                            {
-                                                if (Vector3.Dot(centerPos - refPos, dir) > 0f)
-                                                {
-                                                    if (this.m_rotation == 90)
-                                                        dir = -dir;
-                                                }
-                                            }
-                                            Vector3 centerDirectionNormalized = centerDirection.normalized;
-                                            if (Vector3.Dot(centerPos - refPos, dir) < -11f)
-                                            {
-                                                pos = centerPos + dir * 18f;
-                                            }
-                                            else if ((Vector3.Dot(centerPos - refPos, dir) > 11f))
-                                            {
-                                                pos = centerPos - dir * 18f;
-                                            }
-                                        } else
-                                        {
-                                            float angle = Mathf.Atan2(dir.x, -dir.z);
-                                            ushort adjacentParkingAssetID = CheckForParkingSpaces(centerPos, angle, currentBuilding.m_width, currentBuilding.m_length);
-                                            bool snappedToParkingAsset = false;
-                                            /*
-                                            if (adjacentParkingAssetID != 0) {
-                                                Building adjacentParkingAsset = BuildingManager.instance.m_buildings.m_buffer[adjacentParkingAssetID];
-                                                if (adjacentParkingAsset.m_angle == angle)
-                                                {
-                                                    Debug.Log("[APL].PSAAi.SnapToRoad Snap to this asset id = " + adjacentParkingAssetID.ToString());
-                                                    Vector3 centerDirectionNormalized = centerDirection.normalized;
-                                                    
-                                                    float dist1 = Vector3.Dot(centerPos - adjacentParkingAsset.m_position, centerDirectionNormalized);
-                                                    Debug.Log("[APL].PSAAi.SnapToRoad Dot Product equals " + dist1.ToString());
-                                                    pos = centerPos - (adjacentParkingAsset.Width*4f-dist1)*centerDirectionNormalized + currentBuilding.m_width*4f* centerDirectionNormalized;
-                                                    snappedToParkingAsset = true;
-
-                                                    //snappedToParkingAsset = true;
-                                                }
-                                            } 
-                                            */
-                                            if (snappedToParkingAsset == false) { 
-                                                pos = centerPos;
-                                            }
-                                            
-                                        }
-                                        maxDistance = distanceToRoad;
+                                        potentialMaxDistance = distanceToRoad;
+                                        snappedSegmentID = segmentGridZX;
+                                        centerPos = potentialCenterPos;
+                                        centerDirection = potentialCenterDirection;
+                                        info = potentialInfo;
                                         result = true;
                                     }
 
@@ -241,7 +250,118 @@ namespace ParkingLotSnapping
                     }
                 }
             }
+            if (result == true && snappedSegmentID != 0 && ModSettings.PLRCustomProperties.ContainsKey(info.name))
+            {
+                if (PositionLocking.IsLocked() && segments.m_buffer[snappedSegmentID].IsStraight() && Vector3.Distance(centerPos, PositionLocking.GetCenterPosition()) < maxDistance + info.m_halfWidth)
+                {
+                    centerPos = PositionLocking.GetCenterPosition();
+                    centerDirection = PositionLocking.GetCenterDirection();
+                    Vector3 centerDir = centerDirection.normalized;
+                    float parkingOffset = this.m_parkingWidth;
+                    if (PositionLocking.GetLastParkingWidth() > 0 && PositionLocking.GetLastParkingWidth() != this.m_parkingWidth)
+                    {
+                        parkingOffset = this.m_parkingWidth / 2 + PositionLocking.GetLastParkingWidth() / 2;
+                        //Debug.Log("[PLS].PSAai Snap to Road Now Parking Offset = " + parkingOffset);
+                    }
+
+
+                    List<Vector3> alternativeCenterPositions = new List<Vector3> { centerPos + centerDir * parkingOffset, centerPos - centerDir * parkingOffset };
+
+                    float distance = Vector3.Distance(centerPos, refPos);
+                    //Debug.Log("[PLS].PSAai Snap to Road CenterPos = " + centerPos.ToString());
+                    foreach (Vector3 alternativePosition in alternativeCenterPositions)
+                    {
+                        
+                        float alternativeDistance = Vector3.Distance(alternativePosition, refPos);
+                        //Debug.Log("[PLS].PSAai Snap to Road Checking AlternativeCenterPos = " + alternativePosition.ToString());
+                        if (alternativeDistance < distance)
+                        {
+                            distance = alternativeDistance;
+                            centerPos = alternativePosition;
+                            //Debug.Log("[PLS].PSAai Snap to Road found AlternativeCenterPos = " + centerPos.ToString());
+                        }
+                    }
+                    if (PositionLocking.IsLocked())
+                    {
+                        info = PositionLocking.GetLockedNetInfo();
+                        PositionLocking.SetNextCenterPosition(centerPos);
+                    }
+
+                } else if (PositionLocking.IsLocked())
+                {
+                    PositionLocking.DisengageLock();
+                }
+                
+                Vector3 vector2 = new Vector3(centerDirection.z, 0f, -centerDirection.x);
+                dir = vector2.normalized;
+                List<float> PLRsymetricAisleOffsets = ModSettings.PLRCustomProperties[info.name].SymetricAisleOffsets;
+                float distance2 = maxDistance + info.m_halfWidth;
+                foreach (float offset in PLRsymetricAisleOffsets)
+                {
+                    Vector3 alternativePosition = centerPos + dir * offset;
+                    float alternativeDistance = Vector3.Distance(alternativePosition, refPos);
+                    if (alternativeDistance < distance2)
+                    {
+                        distance2 = alternativeDistance;
+                        pos = alternativePosition;
+                    }
+                }
+
+                if (!PositionLocking.IsLocked())
+                {
+                    PositionLocking.SetSnappedNetInfo(info);
+                    PositionLocking.SetSnappedPosition(pos);
+                    PositionLocking.SetCenterPosition(centerPos);
+                    PositionLocking.SetCenterDirection(centerDirection);
+                    PositionLocking.SetSnappedSegmentId(snappedSegmentID);
+                }
+                else if (ParkingSpaceGrid.CheckGrid(pos) != 0)
+                {
+                    PositionLocking.SetSnappedNetInfo(info);
+                    PositionLocking.SetSnappedPosition(pos);
+                    PositionLocking.SetCenterPosition(centerPos);
+                    PositionLocking.SetCenterDirection(centerDirection);
+                    PositionLocking.SetSnappedSegmentId(snappedSegmentID);
+                    //Debug.Log("[PLS]SnapToRoad Snap Rolling!");
+
+                }
+                
+            }
             
+            if (result == true && !PositionLocking.IsLocked() && ModSettings.AllowLocking && ModSettings.LockOnToPSAKeybind.IsPressed())
+            {
+                bool flag = false;
+                Vector3 position = Vector3.forward;
+                if (ParkingSpaceGrid.CheckGrid(pos) != 0)
+                {
+                    
+                    position = pos;
+                    flag = true;
+                }
+                else if (ParkingSpaceGrid.CheckGrid(refPos) != 0)
+                {
+                    position = refPos;
+                    flag = true;
+                }
+                if (flag)
+                {
+                    Building parkingSpaceAsset = Singleton<BuildingManager>.instance.m_buildings.m_buffer[ParkingSpaceGrid.CheckGrid(position)];
+                    ParkingSpaceAssetAI parkingSpaceAssetAI = parkingSpaceAsset.Info.m_buildingAI as ParkingSpaceAssetAI;
+                    Vector3 centerPos2;
+                    Vector3 centerDirection2;
+                    segments.m_buffer[PositionLocking.GetLastSnappedSegmentID()].GetClosestPositionAndDirection(parkingSpaceAsset.m_position, out centerPos2, out centerDirection2);
+                    if (segments.m_buffer[PositionLocking.GetLastSnappedSegmentID()].IsStraight())
+                    {
+                        pos = parkingSpaceAsset.m_position;
+                        PositionLocking.SetSnappedPosition(pos);
+                        PositionLocking.SetCenterPosition(centerPos2);
+                        PositionLocking.SetCenterDirection(centerDirection2);
+                        PositionLocking.InitiateLock(parkingSpaceAssetAI.m_parkingWidth);
+                        
+                        //Debug.Log("[PLS]SnapToRoad Snaping to existing asset!");
+                    }
+                }
+            }
             return result;
         }
         private bool SnapToOneSide(Vector3 refPos, out Vector3 pos, out Vector3 dir, float maxDistance)
@@ -257,9 +377,13 @@ namespace ParkingLotSnapping
             int minZint = Mathf.Max((int)(minZ / 64f + 135f), 0);
             int maxXint = Mathf.Max((int)(maxX / 64f + 135f), 269);
             int maxZint = Mathf.Max((int)(maxZ / 64f + 135f), 269);
-
             Array16<NetSegment> segments = Singleton<NetManager>.instance.m_segments;
             ushort[] segmentGrid = Singleton<NetManager>.instance.m_segmentGrid;
+            Vector3 centerPos = new Vector3();
+            Vector3 centerDirection = Vector3.forward;
+            int snappedSegmentID = 0;
+            float potentialMaxDistance = maxDistance;
+            NetInfo info = new NetInfo();
             for (int i = minZint; i <= maxZint; i++)
             {
                 for (int j = minXint; j <= maxXint; j++)
@@ -271,161 +395,27 @@ namespace ParkingLotSnapping
                         NetSegment.Flags flags = segments.m_buffer[(int)segmentGridZX].m_flags;
                         if ((flags & (NetSegment.Flags.Created | NetSegment.Flags.Deleted)) == NetSegment.Flags.Created)
                         {
-                            NetInfo info = segments.m_buffer[(int)segmentGridZX].Info;
-                            if (info.m_class.m_service == ItemClass.Service.Road)
+                            NetInfo potentialInfo = segments.m_buffer[(int)segmentGridZX].Info;
+                            //Debug.Log(potentialInfo.name);
+                            if (ModSettings.PLRCustomProperties.ContainsKey(potentialInfo.name))
                             {
                                 Vector3 min = segments.m_buffer[(int)segmentGridZX].m_bounds.min;
                                 Vector3 max = segments.m_buffer[(int)segmentGridZX].m_bounds.max;
                                 if (min.x < maxX && min.z < maxZ && max.x > minX && max.z > minZ)
                                 {
-                                    Vector3 centerPos;
-                                    Vector3 centerDirection;
-                                    segments.m_buffer[(int)segmentGridZX].GetClosestPositionAndDirection(refPos, out centerPos, out centerDirection);
-
-                                    float distanceToRoad = Vector3.Distance(centerPos, refPos) - info.m_halfWidth;
-                                    if (distanceToRoad < maxDistance)
+                                    Vector3 potentialCenterPos;
+                                    Vector3 potentialCenterDirection;
+                                    segments.m_buffer[(int)segmentGridZX].GetClosestPositionAndDirection(refPos, out potentialCenterPos, out potentialCenterDirection);
+                                    float distanceToRoad = Vector3.Distance(potentialCenterPos, refPos) - potentialInfo.m_halfWidth;
+                                    if (distanceToRoad < potentialMaxDistance && ModSettings.PLRCustomProperties.ContainsKey(potentialInfo.name))
                                     {
-                                        if (info.m_lanes.Length == 9 || info.m_halfWidth == 20)
-                                        {
-                                            if (this.m_rotation == 0 || this.m_rotation == 180)
-                                            {
-                                                Vector3 vector2 = new Vector3(centerDirection.z, 0f, -centerDirection.x);
-                                                dir = vector2.normalized;
-                                                float delta = Vector3.Dot(centerPos - refPos, dir);
-                                                if (delta > info.m_halfWidth / 2f && delta > 0 || delta < 0 && delta > -info.m_halfWidth / 2f)
-                                                {
-                                                    if (this.m_rotation == 0)
-                                                        dir = -dir;
-                                                }
-                                            }
-                                            else if (this.m_rotation == 90 || this.m_rotation == 270)
-                                            {
-                                                Vector3 vector2 = new Vector3(centerDirection.x, 0f, centerDirection.z);
-                                                dir = vector2.normalized;
-                                                float delta = Vector3.Dot(centerPos - refPos, dir);
-                                                if (delta > info.m_halfWidth / 2f && delta > 0 || delta < 0 && delta > -info.m_halfWidth / 2f)
-                                                {
-                                                    if (this.m_rotation == 90)
-                                                        dir = -dir;
-                                                }
-                                            }
-                                        }
-                                        else if (info.m_lanes.Length == 13 || info.m_halfWidth == 29)
-                                        {
-                                            if (this.m_rotation == 0 || this.m_rotation == 180)
-                                            {
-                                                Vector3 vector2 = new Vector3(centerDirection.z, 0f, -centerDirection.x);
-                                                dir = vector2.normalized;
-                                                float delta = Vector3.Dot(centerPos - refPos, dir);
-                                                if (delta > 2f * info.m_halfWidth / 3f && delta > 0 || delta > 0 && delta < info.m_halfWidth / 3f || delta < -info.m_halfWidth / 3f && delta > -2f * info.m_halfWidth / 3f)
-                                                {
-                                                    if (this.m_rotation == 0)
-                                                        dir = -dir;
-                                                }
-                                            }
-                                            else if (this.m_rotation == 90 || this.m_rotation == 270)
-                                            {
-                                                Vector3 vector2 = new Vector3(centerDirection.x, 0f, centerDirection.z);
-                                                dir = vector2.normalized;
-                                                float delta = Vector3.Dot(centerPos - refPos, dir);
-                                                if (delta > 2f * info.m_halfWidth / 3f && delta > 0 || delta > 0 && delta < info.m_halfWidth / 3f || delta < -info.m_halfWidth / 3f && delta > 2f * info.m_halfWidth / 3f)
-                                                {
-                                                    if (this.m_rotation == 90)
-                                                        dir = -dir;
-                                                }
-                                            }
-                                        }
-                                        else {
-                                            if (this.m_rotation == 0 || this.m_rotation == 180)
-                                            {
-                                                Vector3 vector2 = new Vector3(centerDirection.z, 0f, -centerDirection.x);
-                                                dir = vector2.normalized;
-                                                if (Vector3.Dot(centerPos - refPos, dir) > 0f)
-                                                {
-                                                    if (this.m_rotation == 0)
-                                                        dir = -dir;
-                                                }
-                                            }
-                                            else if (this.m_rotation == 90 || this.m_rotation == 270)
-                                            {
-                                                Vector3 vector2 = new Vector3(centerDirection.x, 0f, centerDirection.z);
-                                                dir = vector2.normalized;
-                                                if (Vector3.Dot(centerPos - refPos, dir) > 0f)
-                                                {
-                                                    if (this.m_rotation == 90)
-                                                        dir = -dir;
-                                                }
-                                            }
-                                        }
-
-                                        Vector3 centerDirectionNormalized = centerDirection.normalized;
-
-                                        float distanceDivisor = 100f;
-                                        if (info.m_lanes.Length == 9 || info.m_halfWidth == 20)
-                                        {
-                                            float delta2 = Vector3.Dot(centerPos - refPos, dir);
-                                            if (delta2 < -info.m_halfWidth / 2f)
-                                            {
-                                                pos = centerPos + dir * (9f + this.m_offset - (float)ModSettings.DistanceFromCurb / distanceDivisor);
-                                            } else if (delta2 > -info.m_halfWidth / 2f && delta2 < 0)
-                                            {
-                                                pos = centerPos + dir * (9f - this.m_offset - (float)ModSettings.DistanceBetweenParkingStalls/ distanceDivisor);
-                                            } else if (delta2 < info.m_halfWidth)
-                                            {
-                                                pos = centerPos - dir * (9f - this.m_offset + (float)ModSettings.DistanceBetweenParkingStalls / distanceDivisor);
-                                            } else
-                                            {
-                                                pos = centerPos - dir * (9f + this.m_offset - (float)ModSettings.DistanceFromCurb/ distanceDivisor);
-                                            }
-                                        } else if (info.m_lanes.Length == 13 || info.m_halfWidth == 29)
-                                        {
-                                            float delta2 = Vector3.Dot(centerPos - refPos, dir);
-                                            if (delta2 < -2f * info.m_halfWidth / 3f)
-                                            {
-                                                pos = centerPos + dir * (18f + this.m_offset - (float)ModSettings.DistanceFromCurb / distanceDivisor);
-                                            } else if (delta2 < -info.m_halfWidth / 3f)
-                                            {
-                                                pos = centerPos + dir * (18f - this.m_offset - (float)ModSettings.DistanceBetweenParkingStalls / distanceDivisor);
-                                            } else if (delta2 < 0f)
-                                            {
-                                                pos = centerPos + dir * (this.m_offset - (float)ModSettings.DistanceBetweenParkingStalls / distanceDivisor);
-                                            } else if (delta2 < info.m_halfWidth / 3f)
-                                            {
-                                                pos = centerPos - dir * (this.m_offset + (float)ModSettings.DistanceBetweenParkingStalls / distanceDivisor);
-                                            } else if (delta2 < 2f * info.m_halfWidth / 3f)
-                                            {
-                                                pos = centerPos - dir * (18f - this.m_offset + (float)ModSettings.DistanceBetweenParkingStalls / distanceDivisor);
-                                            } else
-                                            {
-                                                pos = centerPos - dir * (18f + this.m_offset - (float)ModSettings.DistanceFromCurb / distanceDivisor);
-                                            }
-                                        }
-                                        else if (info.m_lanes.Length == 4 || info.m_halfWidth == 8)
-                                        {
-                                            if (Vector3.Dot(centerPos - refPos, dir) < 0f)
-                                            {
-                                                pos = centerPos + dir * (this.m_offset - 3f - (float)ModSettings.DistanceFromCurb / distanceDivisor);
-                                            }
-                                            else
-                                            {
-                                                pos = centerPos - dir * (this.m_offset-3f - (float)ModSettings.DistanceFromCurb / distanceDivisor);
-                                            }
-                                        } else { 
-                                           
-                                            if (Vector3.Dot(centerPos - refPos, dir) < 0f)
-                                            {
-                                                pos = centerPos + dir * (this.m_offset - (float)ModSettings.DistanceFromCurb / distanceDivisor);
-                                            }
-                                            else
-                                            {
-                                                pos = centerPos - dir * (this.m_offset - (float)ModSettings.DistanceFromCurb / distanceDivisor);
-                                            }
-                                        }
-                                        
-                                        maxDistance = distanceToRoad;
+                                        potentialMaxDistance = distanceToRoad;
+                                        snappedSegmentID = segmentGridZX;
+                                        centerPos = potentialCenterPos;
+                                        centerDirection = potentialCenterDirection;
+                                        info = potentialInfo;
                                         result = true;
                                     }
-
 
                                 }
                             }
@@ -440,55 +430,232 @@ namespace ParkingLotSnapping
                 }
             }
 
-            return result;
-        }
-        private ushort CheckForParkingSpaces(Vector3 pos, float angle, int width, int length)
-        {
-            Vector2 a = new Vector2(Mathf.Cos(angle), Mathf.Sin(angle));
-            Vector2 a2 = new Vector2(a.y, 0f - a.x);
-            a *= (float)width * 4f;
-            a2 *= (float)length * 4f;
-            Vector2 vector = VectorUtils.XZ(pos);
-            Quad2 quad = default(Quad2);
-            quad.a = vector - a - a2;
-            quad.b = vector + a - a2;
-            quad.c = vector + a + a2;
-            quad.d = vector - a + a2;
-            BuildingManager instance = Singleton<BuildingManager>.instance;
-            Vector2 vector3 = quad.Min();
-            Vector2 vector2 = quad.Max();
-            int num = Mathf.Max((int)((vector3.x - 72f) / 64f + 135f), 0);
-            int num2 = Mathf.Max((int)((vector3.y - 72f) / 64f + 135f), 0);
-            int num3 = Mathf.Min((int)((vector2.x + 72f) / 64f + 135f), 269);
-            int num4 = Mathf.Min((int)((vector2.y + 72f) / 64f + 135f), 269);
-            //bool result = false;
-            for (int i = num2; i <= num4; i++)
+
+
+            if (result == true && snappedSegmentID != 0 && ModSettings.PLRCustomProperties.ContainsKey(info.name))
             {
-                for (int j = num; j <= num3; j++)
+                if (PositionLocking.IsLocked() && segments.m_buffer[snappedSegmentID].IsStraight() && Vector3.Distance(centerPos, PositionLocking.GetCenterPosition()) < maxDistance + info.m_halfWidth)
                 {
-                    ushort num5 = instance.m_buildingGrid[i * 270 + j];
-                    int num6 = 0;
-                    while (num5 != 0)
+                    centerPos = PositionLocking.GetCenterPosition();
+                    centerDirection = PositionLocking.GetCenterDirection();
+                    Vector3 centerDir = centerDirection.normalized;
+                    float parkingOffset = this.m_parkingWidth;
+                    if (PositionLocking.GetLastParkingWidth() > 0 && PositionLocking.GetLastParkingWidth() != this.m_parkingWidth)
                     {
-                        BuildingInfo info = instance.m_buildings.m_buffer[num5].Info;
-                        ItemClass.CollisionType collisionType = ItemClass.CollisionType.Zoned;
-                        if ((object)info != null && instance.m_buildings.m_buffer[num5].OverlapQuad(num5, quad, pos.y-1000f, pos.y+1000f, collisionType))
+                        parkingOffset = this.m_parkingWidth / 2 + PositionLocking.GetLastParkingWidth() / 2;
+                        //Debug.Log("[PLS].PSAai Snap to Road Now Parking Offset = " + parkingOffset);
+                    }
+
+
+                    List<Vector3> alternativeCenterPositions = new List<Vector3> { centerPos + centerDir * parkingOffset, centerPos - centerDir * parkingOffset };
+
+                    float distance = Vector3.Distance(centerPos, refPos);
+                    //Debug.Log("[PLS].PSAai Snap to Road CenterPos = " + centerPos.ToString());
+                    foreach (Vector3 alternativePosition in alternativeCenterPositions)
+                    {
+                        float alternativeDistance = Vector3.Distance(alternativePosition, refPos);
+                        //Debug.Log("[PLS].PSAai Snap to Road Checking AlternativeCenterPos = " + alternativePosition.ToString());
+                        if (alternativeDistance < distance)
                         {
-                            if (info.m_buildingAI is ParkingSpaceAssetAI)
-                                return num5;
+                            distance = alternativeDistance;
+                            centerPos = alternativePosition;
+                            //Debug.Log("[PLS].PSAai Snap to Road found AlternativeCenterPos = " + centerPos.ToString());
                         }
-                        num5 = instance.m_buildings.m_buffer[num5].m_nextGridBuilding;
-                        if (++num6 >= 49152)
-                        {
-                            CODebugBase<LogChannel>.Error(LogChannel.Core, "Invalid list detected!\n" + Environment.StackTrace);
-                            break;
-                        }
+                    }
+                    if (PositionLocking.IsLocked())
+                    {
+                        info = PositionLocking.GetLockedNetInfo();
+                        PositionLocking.SetNextCenterPosition(centerPos);
+
+                    }
+                }
+                else if (PositionLocking.IsLocked())
+                {
+                    PositionLocking.DisengageLock();
+                }
+                float distanceToRoad = Vector3.Distance(centerPos, refPos) - info.m_halfWidth;
+                if (distanceToRoad < maxDistance && ModSettings.PLRCustomProperties.ContainsKey(info.name))
+                {
+                    //Debug.Log(info.name);
+
+                    Vector3 vector2 = new Vector3(centerDirection.z, 0f, -centerDirection.x);
+                    dir = vector2.normalized;
+                    
+                    List<float> PLRasymetricAisleOffsets = ModSettings.PLRCustomProperties[info.name].AsymetricAisleOffsets;
+                    Dictionary<Vector3, Vector3> alternativePositions = new Dictionary<Vector3, Vector3>();
+                    foreach (float aisleOffset in PLRasymetricAisleOffsets)
+                    {
+                        Vector3 alternativeAislePosition = new Vector3();
+                       
+                        alternativeAislePosition = centerPos + dir * aisleOffset; 
                         
+                       
+                        float alternativeAisleDistance = Vector3.Distance(alternativeAislePosition, refPos);
+                        if (ModSettings.PLRCustomProperties[info.name].Onesided == false)
+                        {
+                            alternativePositions.Add(alternativeAislePosition + dir * this.m_offset, alternativeAislePosition);
+                            alternativePositions.Add(alternativeAislePosition - dir * this.m_offset, alternativeAislePosition);
+                        }
+                        else
+                        {
+                            Vector3 tempDir = new Vector3(alternativeAislePosition.x - centerPos.x, 0, alternativeAislePosition.z - centerPos.z);
+                            tempDir.Normalize();
+                            
+                            if (info.m_halfWidth == 8f)
+                            {
+                                tempDir *= -1;
+                            }
+                            alternativePositions.Add(alternativeAislePosition + tempDir * this.m_offset, alternativeAislePosition);
+                           
+                        }
+                    }
+                    float distance2 = maxDistance + info.m_halfWidth;
+                    
+                    foreach (KeyValuePair<Vector3, Vector3> alternativePosition in alternativePositions)
+                    {
+                        float alternativeDistance = Vector3.Distance(alternativePosition.Key, refPos);
+                       
+                        if (alternativeDistance < distance2)
+                        {
+                            distance2 = alternativeDistance;
+                            pos = alternativePosition.Key;
+                           
+                            Vector3 tempDir = alternativePosition.Key - alternativePosition.Value;
+                            dir = tempDir.normalized;
+                           
+                        }
+                    }
+                    
+                    result = true;
+                    if (!PositionLocking.IsLocked())
+                    {
+                        PositionLocking.SetSnappedNetInfo(info);
+                        PositionLocking.SetSnappedPosition(pos);
+                        PositionLocking.SetCenterPosition(centerPos);
+                        PositionLocking.SetCenterDirection(centerDirection);
+                        PositionLocking.SetSnappedSegmentId(snappedSegmentID);
+                    }
+                    else if (ParkingSpaceGrid.CheckGrid(pos) != 0)
+                    {
+                        PositionLocking.SetSnappedNetInfo(info);
+                        PositionLocking.SetSnappedPosition(pos);
+                        PositionLocking.SetCenterPosition(centerPos);
+                        PositionLocking.SetCenterDirection(centerDirection);
+                        PositionLocking.SetSnappedSegmentId(snappedSegmentID);
+                        //Debug.Log("[PLS]SnapToRoad Snap Rolling!");
+
                     }
                 }
             }
-            return (ushort)0;
+            if (result == true && !PositionLocking.IsLocked() && ModSettings.AllowLocking && ModSettings.LockOnToPSAKeybind.IsPressed())
+            {
+                bool flag = false;
+                Vector3 position = Vector3.forward;
+                if (ParkingSpaceGrid.CheckGrid(pos) != 0)
+                {
+                    position = pos;
+                    flag = true;
+                }
+                else if (ParkingSpaceGrid.CheckGrid(refPos) != 0)
+                {
+                    position = refPos;
+                    flag = true;
+                }
+                if (flag)
+                {
+                    Building parkingSpaceAsset = Singleton<BuildingManager>.instance.m_buildings.m_buffer[ParkingSpaceGrid.CheckGrid(position)];
+                    ParkingSpaceAssetAI parkingSpaceAssetAI = parkingSpaceAsset.Info.m_buildingAI as ParkingSpaceAssetAI;
+                    Vector3 centerPos2;
+                    Vector3 centerDirection2;
+                    segments.m_buffer[PositionLocking.GetLastSnappedSegmentID()].GetClosestPositionAndDirection(parkingSpaceAsset.m_position, out centerPos2, out centerDirection2);
+                    if (segments.m_buffer[PositionLocking.GetLastSnappedSegmentID()].IsStraight())
+                    {
+                        pos = parkingSpaceAsset.m_position;
+                        PositionLocking.SetSnappedPosition(pos);
+                        PositionLocking.SetCenterPosition(centerPos2);
+                        PositionLocking.SetCenterDirection(centerDirection2);
+                        PositionLocking.InitiateLock(parkingSpaceAssetAI.m_parkingWidth);
+                        //Debug.Log("[PLS]SnapToRoad Snaping to existing asset!");
+                    }
+                }
+            }
+            return result;
+        }
+        
+
+        // Undo method properties
+        private static bool UndoEnabled = true;
+        private static uint UndoCount = 0; // Number of undo actions performed in a row
+        private static double CurrentUndoTime = SlowUndoTime; // Current Undo speed (fast or slow)
+        private static DateTime LastUndoTime; // Time of last Undo action
+        private const double SlowUndoTime = 0.8; // Time between undo actions that will be performed (slow)
+        private const double FastUndoTime = 0.15; // (fast)
+        private const uint SlowToFastUndoThreshold = 5; // How many undos to switch from slow to fast undo
+
+        public override string GetConstructionInfo(int productionRate)
+        {
+            // KEYBIND: Check if undo keybind (whichever it is currently) is pressed
+            if (!ModSettings.UndoKeybind.IsPressed()) // When key ot pressed, Undo is reset
+            {
+                UndoEnabled = true; // Enable future undo
+                UndoCount = 0;
+                CurrentUndoTime = SlowUndoTime;
+            }
+            else // When undo key pressed
+            {
+                if (UndoEnabled) // If undo is enabled
+                {
+                    UndoEnabled = false; // Disable undo temporarily
+                    Undo.releaseLastBuilding(); // Perform Undo
+                    LastUndoTime = DateTime.Now;
+                    UndoCount++;
+                    if (ModSettings.UndoDisengagesLock && PositionLocking.IsLocked()) PositionLocking.DisengageLock();
+                }
+                else
+                {
+                    if ((DateTime.Now - LastUndoTime).TotalSeconds >= CurrentUndoTime) UndoEnabled = true; // Enables undo after enough time passed
+                    if ((CurrentUndoTime >= SlowUndoTime) && (UndoCount >= SlowToFastUndoThreshold)) CurrentUndoTime = FastUndoTime; // If undo count surpassed threshold and we're in slow speed, switch to fast speed
+                }
+            }
+
+            if (ModSettings.DisableTooltips)
+            {
+                return "";
+            }
+            if (PositionLocking.IsLocked() && PositionLocking.GetOverlapping() == false)
+            {
+                if (ModSettings.KeyboardShortcutHints == false)
+                {
+                    return "Locked!";
+                }
+                StringBuilder sb = new StringBuilder();
+                sb.AppendLine("Locked!");
+                // KEYBIND: To obtain current keybind's setting in "string form", just use SavedInputKey.ToLocalizedString("KEYNAME")
+                sb.Append("Press " + ModSettings.UnlockKeybind.ToLocalizedString("KEYNAME") + " to Unlock.");
+                return sb.ToString();
+            } else if (PositionLocking.IsLocked())
+            {
+                if (ModSettings.KeyboardShortcutHints == false)
+                {
+                    return "Locked but Overlapping!";
+                }
+                StringBuilder sb = new StringBuilder();
+                sb.AppendLine("Locked but Overlapping!");
+                sb.AppendLine("Placing a new Parking Space Asset ");
+                if (ModSettings.OverrideOverlapping)
+                {
+                    sb.Append("here will override existing.");
+                } else
+                {
+                    sb.Append("here may causes problems latter!");
+                }
+                return sb.ToString();
+            } else if (PositionLocking.canReturnToPreviousLockPosition() && ModSettings.KeyboardShortcutHints == true)
+            {
+                // KEYBIND: To obtain current keybind's setting in "string form", just use SavedInputKey.ToLocalizedString("KEYNAME")
+                return "Press " + ModSettings.ReturnLockKeybind.ToLocalizedString("KEYNAME") + " to Re-lock to last locked position.";
+            }
+            return "";
         }
     }
 }
-

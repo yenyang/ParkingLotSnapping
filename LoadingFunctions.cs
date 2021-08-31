@@ -14,18 +14,12 @@ namespace ParkingLotSnapping
     {
         private LoadMode _mode;
         public static bool Loaded = false;
-        private ulong workshop_id = 0;
+       
         public override void OnCreated(ILoading loading)
         {
 
             base.OnCreated(loading);
-            foreach (PublishedFileId mod in PlatformService.workshop.GetSubscribedItems())
-            {
-                if (mod.AsUInt64 == workshop_id)
-                {
-                    ColossalFramework.Packaging.PackageManager.instance.LoadPackages(mod);
-                }
-            }
+           
             
             if (CitiesHarmony.API.HarmonyHelper.IsHarmonyInstalled) Patcher.PatchAll();
         }
