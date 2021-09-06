@@ -23,7 +23,7 @@ namespace ParkingLotSnapping
         public static readonly SavedInputKey ReturnLockKeybind = new SavedInputKey("returnLockKeybind", settingsFileName, ReturnLockDefaultKey, autoUpdate: true);
         private static InputKey UndoDefaultKey = SavedInputKey.Encode(KeyCode.Z, control: true, shift: false, alt: false);
         public static readonly SavedInputKey UndoKeybind = new SavedInputKey("undoKeybind", settingsFileName, UndoDefaultKey, autoUpdate: true);
-        private static InputKey LockOnToPSADefaultKey = SavedInputKey.Encode(KeyCode.F, control: false, shift: false, alt: false);
+        private static InputKey LockOnToPSADefaultKey = SavedInputKey.Encode(KeyCode.G, control: false, shift: false, alt: false);
         public static readonly SavedInputKey LockOnToPSAKeybind = new SavedInputKey("LockToPSAKeybind", settingsFileName, LockOnToPSADefaultKey, autoUpdate: true);
 
 
@@ -35,7 +35,7 @@ namespace ParkingLotSnapping
             {
                 if (_PassElectricityInt == null)
                 {
-                    _PassElectricityInt = PlayerPrefs.GetInt("PLS_PassElectricity", 0);
+                    _PassElectricityInt = PlayerPrefs.GetInt("PLS_PassElectricity", 1);
                 }
                 if (_PassElectricityInt == 1)
                 {
@@ -400,7 +400,7 @@ namespace ParkingLotSnapping
         public static void resetModSettings()
         {
 
-            ModSettings.PassElectricity = false;
+            ModSettings.PassElectricity = true;
             ModSettings.AllowLocking = true;
             ModSettings.AllowSnapping = true;
             ModSettings.OverrideOverlapping = true;
