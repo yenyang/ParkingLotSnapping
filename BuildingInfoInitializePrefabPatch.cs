@@ -16,7 +16,6 @@ namespace ParkingLotSnapping
         {
             //Debug.Log("[PLS]BuildingInfoInitializePrefabPatch Prefix");
 
-            
             var oldAI = __instance.gameObject.GetComponent<PrefabAI>();
             //Debug.Log("[PLS]BuildingInfoInitializePrefabPatch oldAI.GetType().fullname = " + oldAI.GetType().FullName);
             if (oldAI.GetType() == typeof(DummyBuildingAI) && __instance.name.Length > 17)
@@ -30,7 +29,6 @@ namespace ParkingLotSnapping
 
                 if (flag)
                 {
-                    __instance.m_disableSnow = true;
                     ModSettings.PSACustomPropertiesStruct psaCustomProperties = ModSettings.PSACustomProperties.GetValueSafe<String, ModSettings.PSACustomPropertiesStruct>(assetName);
                     //Debug.Log("[PLS]BuildingInfoInitializePrefabPatch " + psa.Key + " found!");
                     UnityEngine.Object.DestroyImmediate(oldAI);

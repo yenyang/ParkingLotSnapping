@@ -3,10 +3,12 @@ using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using UnityEngine;
 using ColossalFramework;
+using System.Xml;
+using System.Xml.Serialization;
 
 namespace ParkingLotSnapping
 {
-    internal static class ModSettings
+    public static class ModSettings
     {
         // KEYBIND: key initialization section
         // As part of the settings, I define the Keybinds
@@ -474,22 +476,27 @@ namespace ParkingLotSnapping
 
         public static Dictionary<string, PLRCustomPropertiesClass> PLRCustomProperties = new Dictionary<string, PLRCustomPropertiesClass>()
         {
-            {"1285230481.16m Parking Lot_Data",                 new PLRCustomPropertiesClass(new List<float>() {},                  new List<float> { 3f,-3f }, true) },
-            {"1303766506.16m Poorly Maintained Parking_Data",   new PLRCustomPropertiesClass(new List<float>() {},                  new List<float> { 3f,-3f }, true) },
-            {"1285201733.22m Parking Lot_Data",                 new PLRCustomPropertiesClass(new List<float>() {0f},                new List<float> { 0f }, false) },
-            {"1303772884.22m Poorly Maintained Parking_Data",   new PLRCustomPropertiesClass(new List<float>() {0f},                new List<float> { 0f }, false) },
-            {"1285201733.40m Parking Lot_Data",                 new PLRCustomPropertiesClass(new List<float>() {9f,-9f},            new List<float> { 9f, -9f }, false) },
-            {"1303772884.40m Poorly Maintained Parking_Data",   new PLRCustomPropertiesClass(new List<float>() {9f,-9f},            new List<float> { 9f, -9f }, false) },
-            {"1285201733.58m Parking Lot_Data",                 new PLRCustomPropertiesClass(new List<float>() {0f, 18f,-18f},      new List<float> { 0f,18f,-18f}, false) },
-            {"1303772884.58m Poorly Maintained Parking_Data",   new PLRCustomPropertiesClass(new List<float>() {0f, 18f,-18f},      new List<float> { 0f,18f,-18f}, false) },
-            {"1578348250.Tram Road #01_Data",                   new PLRCustomPropertiesClass(new List<float>() {},                  new List<float> { 4.5f, -4.5f }, true) },
-            {"1581742834.Tram Road #02_Data",                   new PLRCustomPropertiesClass(new List<float>() {0f},                new List<float>{ 0f }, false) },
-            {"1423812793.60°/90° Parking Road 2L Urban_Data",   new PLRCustomPropertiesClass(new List<float>() {},                  new List<float> { 1.65f,-1.65f }, true) },
-            {"1426090117.60°/90° Parking Road 2L Suburban_Data",new PLRCustomPropertiesClass(new List<float>() {},                  new List<float> { 1.65f, -1.65f }, true) },
-            {"1608297735.Tram Road#02 - 90° Parking Lots_Data", new PLRCustomPropertiesClass(new List<float>() {0f},                new List<float>{ 0f }, false) },
-            {"1608293777.Tram Road#01 - 90° Parking Lots_Data", new PLRCustomPropertiesClass(new List<float>() {},                  new List<float> { 4.5f, -4.5f }, true) },
-
-
+            {"1285230481.16m Parking Lot_Data",                 new PLRCustomPropertiesClass(new List<float>() {},                  new List<float> { 3f,-3f },         true,   true) },
+            {"1303766506.16m Poorly Maintained Parking_Data",   new PLRCustomPropertiesClass(new List<float>() {},                  new List<float> { 3f,-3f },         true,   true) },
+            {"1285201733.22m Parking Lot_Data",                 new PLRCustomPropertiesClass(new List<float>() {0f},                new List<float> { 0f },             false,  false) },
+            {"1303772884.22m Poorly Maintained Parking_Data",   new PLRCustomPropertiesClass(new List<float>() {0f},                new List<float> { 0f },             false,  false) },
+            {"1285201733.40m Parking Lot_Data",                 new PLRCustomPropertiesClass(new List<float>() {9f,-9f},            new List<float> { 9f, -9f },        false,  false) },
+            {"1303772884.40m Poorly Maintained Parking_Data",   new PLRCustomPropertiesClass(new List<float>() {9f,-9f},            new List<float> { 9f, -9f },        false,  false) },
+            {"1285201733.58m Parking Lot_Data",                 new PLRCustomPropertiesClass(new List<float>() {0f, 18f,-18f},      new List<float> { 0f,18f,-18f},     false,  false) },
+            {"1303772884.58m Poorly Maintained Parking_Data",   new PLRCustomPropertiesClass(new List<float>() {0f, 18f,-18f},      new List<float> { 0f,18f,-18f},     false,  false) },
+            {"1578348250.Tram Road #01_Data",                   new PLRCustomPropertiesClass(new List<float>() {},                  new List<float> { 4.5f, -4.5f },    true,   false) },
+            {"1581742834.Tram Road #02_Data",                   new PLRCustomPropertiesClass(new List<float>() {0f},                new List<float>{ 0f },              false,  false) },
+            {"1423812793.60°/90° Parking Road 2L Urban_Data",   new PLRCustomPropertiesClass(new List<float>() {},                  new List<float> { 1.65f,-1.65f },   true,   false) },
+            {"1426090117.60°/90° Parking Road 2L Suburban_Data",new PLRCustomPropertiesClass(new List<float>() {},                  new List<float> { 1.65f, -1.65f },  true,   false) },
+            {"1608297735.Tram Road#02 - 90° Parking Lots_Data", new PLRCustomPropertiesClass(new List<float>() {0f},                new List<float>{ 0f },              false,  false) },
+            {"1608293777.Tram Road#01 - 90° Parking Lots_Data", new PLRCustomPropertiesClass(new List<float>() {},                  new List<float> { 4.5f, -4.5f },  true,   false) },
+            {"2409968332.US 2L 2W Parking Asym Concr Tree_Data",new PLRCustomPropertiesClass(new List<float>() {},                  new List<float> { 0.15f, -0.15f},   true,   true) },
+            {"2409968332.US 2L 2W Parking Asym Concrete_Data",  new PLRCustomPropertiesClass(new List<float>() {},                  new List<float> { 0.15f, -0.15f},   true,   true) },
+            {"2409968332.US 2L 2W Parking Asym Red_Data",       new PLRCustomPropertiesClass(new List<float>() {},                  new List<float> { 0.15f, -0.15f},   true,   true) },
+            {"2409968332.US 2L 2W Parking Asym Red Tree_Data",  new PLRCustomPropertiesClass(new List<float>() {},                  new List<float> { 0.15f, -0.15f},   true,   true) },
+            {"2409968332.US 2L 2W Parking Sym Concrete_Data",   new PLRCustomPropertiesClass(new List<float>() {0f},                new List<float> { 0f },             false,  false) },
+            {"2409968332.US 2L 2W Parking Sym Red_Data",        new PLRCustomPropertiesClass(new List<float>() {0f},                new List<float> { 0f },             false,  false) },
+            {"Parking Lot 01",                                  new PLRCustomPropertiesClass(new List<float>() {0f},                new List<float> { 0f },             false,  false) },
         };
 
 
@@ -498,11 +505,14 @@ namespace ParkingLotSnapping
             private List<float> m_symetricAisleOffsets;
             private List<float> m_asymetricAisleOffsets;
             private bool m_onesided;
-            public PLRCustomPropertiesClass(List<float> symetricAisleOffsets, List<float> asymetricAisleOffsets, bool onesided)
+            private bool m_invertOffset;
+            public PLRCustomPropertiesClass() { } // Need in order to make de-serializer work
+            public PLRCustomPropertiesClass(List<float> symetricAisleOffsets, List<float> asymetricAisleOffsets, bool onesided, bool invertOffset)
             {
                 this.m_symetricAisleOffsets = symetricAisleOffsets;
                 this.m_asymetricAisleOffsets = asymetricAisleOffsets;
                 this.m_onesided = onesided;
+                this.m_invertOffset = invertOffset;
             }
             public List<float> SymetricAisleOffsets
             {
@@ -519,8 +529,32 @@ namespace ParkingLotSnapping
                 get { return this.m_onesided; }
                 set { this.m_onesided = value; }
             }
-        }
-       
 
+            public bool InvertOffset
+            {
+                get { return this.m_invertOffset; }
+                set { this.m_invertOffset = value; }
+            }
+        }
+
+        public static bool assetCreatorMode = false;
+        public static List<string> unacceptableInfoNames = new List<string>() { "Highway", "Ship Path", "Airplane Path", "Airplane Connection Path", "Castle Wall 3", "HighwayRamp" , "HighwayRampElevated" };
+        public static string lastAssetCreatorModeInfo = "";
+
+        public static void SerializePLRProperties(PLRCustomPropertiesClass target) // Only for testing output format! Will save reference XML to desktop
+        {
+            XmlSerializer serTool = new XmlSerializer(target.GetType()); // Create serializer
+            var path = Environment.GetFolderPath(Environment.SpecialFolder.Desktop) + "/TestOutput.xml"; // Find path
+            System.IO.FileStream file = System.IO.File.Create(path); // Create file
+            serTool.Serialize(file, target); // Serialize whole properties
+            file.Close(); // Close file
+        }
+        public static PLRCustomPropertiesClass DeserializePLRProperties(string path)
+        {
+            XmlSerializer serTool = new XmlSerializer(typeof(PLRCustomPropertiesClass)); // Create serializer
+            System.IO.FileStream readStream = new System.IO.FileStream(path, System.IO.FileMode.Open); // Open file
+            var result = (PLRCustomPropertiesClass)serTool.Deserialize(readStream); // Des-serialize to new Properties
+            return result;
+        }
     }
 }

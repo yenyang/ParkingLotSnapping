@@ -67,8 +67,12 @@ namespace ParkingLotSnapping
                     NetSegment lastSnappedSegment = NetManager.instance.m_segments.m_buffer[PositionLocking.GetLastSnappedSegmentID()];
                     if (lastSnappedSegment.IsStraight())
                     {
-                        PositionLocking.InitiateLock(this.m_parkingWidth);
-                    }
+                        PositionLocking.InitiateLock(this.m_parkingWidth, false);
+                    }/* else
+                    {
+                        bool curvedLock = PositionLocking.InitiateLock(this.m_parkingWidth, true);
+                        Debug.Log("[PLS].ParkingSpaceAssetAI.CreateBuilding Trying to initiate Lock on Curve. Locked = " + curvedLock.ToString());
+                    }*/
                 }catch (Exception e)
                 {
                     Debug.Log("[PLS].ParkingSpaceAssetAI.CreateBuilding Couldn't lock encoutnred exception " + e.ToString());
@@ -256,6 +260,7 @@ namespace ParkingLotSnapping
                 {
                     centerPos = PositionLocking.GetCenterPosition();
                     centerDirection = PositionLocking.GetCenterDirection();
+                    centerDirection.y = 0; //edit for steep slope problem
                     Vector3 centerDir = centerDirection.normalized;
                     float parkingOffset = this.m_parkingWidth;
                     if (PositionLocking.GetLastParkingWidth() > 0 && PositionLocking.GetLastParkingWidth() != this.m_parkingWidth)
@@ -356,8 +361,7 @@ namespace ParkingLotSnapping
                         PositionLocking.SetSnappedPosition(pos);
                         PositionLocking.SetCenterPosition(centerPos2);
                         PositionLocking.SetCenterDirection(centerDirection2);
-                        PositionLocking.InitiateLock(parkingSpaceAssetAI.m_parkingWidth);
-                        
+                        PositionLocking.InitiateLock(parkingSpaceAssetAI.m_parkingWidth, false);
                         //Debug.Log("[PLS]SnapToRoad Snaping to existing asset!");
                     }
                 }
@@ -396,8 +400,8 @@ namespace ParkingLotSnapping
                         if ((flags & (NetSegment.Flags.Created | NetSegment.Flags.Deleted)) == NetSegment.Flags.Created)
                         {
                             NetInfo potentialInfo = segments.m_buffer[(int)segmentGridZX].Info;
-                            //Debug.Log(potentialInfo.name);
-                            if (ModSettings.PLRCustomProperties.ContainsKey(potentialInfo.name))
+                                
+                            if (ModSettings.PLRCustomProperties.ContainsKey(potentialInfo.name) || ModSettings.assetCreatorMode == true && ModSettings.unacceptableInfoNames.Contains(potentialInfo.name) == false && potentialInfo.m_netAI is RoadAI)
                             {
                                 Vector3 min = segments.m_buffer[(int)segmentGridZX].m_bounds.min;
                                 Vector3 max = segments.m_buffer[(int)segmentGridZX].m_bounds.max;
@@ -406,8 +410,9 @@ namespace ParkingLotSnapping
                                     Vector3 potentialCenterPos;
                                     Vector3 potentialCenterDirection;
                                     segments.m_buffer[(int)segmentGridZX].GetClosestPositionAndDirection(refPos, out potentialCenterPos, out potentialCenterDirection);
+                                
                                     float distanceToRoad = Vector3.Distance(potentialCenterPos, refPos) - potentialInfo.m_halfWidth;
-                                    if (distanceToRoad < potentialMaxDistance && ModSettings.PLRCustomProperties.ContainsKey(potentialInfo.name))
+                                    if (distanceToRoad < potentialMaxDistance && ModSettings.PLRCustomProperties.ContainsKey(potentialInfo.name) || distanceToRoad < potentialMaxDistance && ModSettings.assetCreatorMode == true && ModSettings.unacceptableInfoNames.Contains(potentialInfo.name) == false && potentialInfo.m_netAI is RoadAI)
                                     {
                                         potentialMaxDistance = distanceToRoad;
                                         snappedSegmentID = segmentGridZX;
@@ -418,7 +423,8 @@ namespace ParkingLotSnapping
                                     }
 
                                 }
-                            }
+                            } 
+                            
                         }
                         segmentGridZX = segments.m_buffer[(int)segmentGridZX].m_nextGridSegment;
                         if (++iterator >= 32768)
@@ -427,18 +433,101 @@ namespace ParkingLotSnapping
                             break;
                         }
                     }
+                   
                 }
             }
+            /*asset Creator mod*/
+            if (result == true && ModSettings.assetCreatorMode == true && ModSettings.unacceptableInfoNames.Contains(info.name) == false && info.m_netAI is RoadAI && info.name != ModSettings.lastAssetCreatorModeInfo)
+            {
 
+                Debug.Log("[PLS].Parking Lot Snapping Asset Creator Mode Log : " + info.name);
+                List<float> laneOffsets = new List<float>();
+                List<NetInfo.Lane> carLanes = new List<NetInfo.Lane>();
+                Dictionary<float, NetInfo.Direction> offsetAndDirection = new Dictionary<float, NetInfo.Direction>();
+                foreach (NetInfo.Lane lane in info.m_lanes)
+                {
+                    
+                    if ((lane.m_vehicleType & VehicleInfo.VehicleType.Car) != 0)
+                    {
+                        Debug.Log("[PLS].Parking Lot Snapping Asset Creator Mode Log : lane offset = " + lane.m_position.ToString() + " lane type = " + lane.m_vehicleType.ToString() + " lane direction = " + lane.m_direction.ToString());
 
-
+                        laneOffsets.Add(lane.m_position);
+                        carLanes.Add(lane);
+                        offsetAndDirection.Add(lane.m_position, lane.m_direction);
+                    }
+                    
+                }
+                if (laneOffsets.Count >= 2)
+                {
+                    List<float> symetricAisleOffsets = new List<float>();
+                    List<float> asymetricAisleOffsets = new List<float>();
+                    bool onesided = false;
+                    bool invertOffset = false;
+                    float roadwayMaxSeperation = 4f;
+                    float asymetricOffsetAmount = 1.5f;
+                    if (laneOffsets.Min() >= 0 || laneOffsets.Max() <= 0)
+                    {
+                        onesided = true;
+                        invertOffset = true;
+                        if (laneOffsets.Count == 2)
+                        {
+                            asymetricAisleOffsets.Add(laneOffsets.Average());
+                            asymetricAisleOffsets.Add(-1*laneOffsets.Average());
+                        }
+                    }
+                    else
+                    {
+                        laneOffsets.Sort();
+                        for (int i = 1; i < laneOffsets.Count(); i++)
+                        {
+                            if (Mathf.Abs(laneOffsets[i] - laneOffsets[i - 1]) < roadwayMaxSeperation && offsetAndDirection[laneOffsets[i]] != offsetAndDirection[laneOffsets[i - 1]])
+                            {
+                                symetricAisleOffsets.Add((laneOffsets[i] + laneOffsets[i - 1]) / 2f);
+                                asymetricAisleOffsets.Add((laneOffsets[i] + laneOffsets[i - 1]) / 2f);
+                            }
+                        }
+                        if (symetricAisleOffsets.Count == 0 && asymetricAisleOffsets.Count == 0)
+                        {
+                            onesided = true;
+                            asymetricAisleOffsets.Add(laneOffsets.Min() + asymetricOffsetAmount);
+                            asymetricAisleOffsets.Add(laneOffsets.Max() - asymetricOffsetAmount);
+                        }
+                    }
+                    StringBuilder sb = new StringBuilder();
+                    sb.Append(info.name);
+                    sb.Append(", {");
+                    foreach(float offset in symetricAisleOffsets)
+                    {
+                        sb.Append(offset.ToString());
+                        sb.Append(", ");
+                    }
+                    sb.Append("}, {");
+                    foreach (float offset in asymetricAisleOffsets)
+                    {
+                        sb.Append(offset.ToString());
+                        sb.Append(", ");
+                    }
+                    sb.Append("}, ");
+                    sb.Append(onesided.ToString());
+                    sb.Append(", ");
+                    sb.Append(invertOffset.ToString());
+                    sb.Append(";");
+                    Debug.Log(sb.ToString());
+                    ModSettings.PLRCustomPropertiesClass assetCreatorPLRCustomProperties = new ModSettings.PLRCustomPropertiesClass(symetricAisleOffsets, asymetricAisleOffsets, onesided, invertOffset);
+                }
+                ModSettings.lastAssetCreatorModeInfo = info.name;
+            }
+            /*end asset crator mod*/
+             
             if (result == true && snappedSegmentID != 0 && ModSettings.PLRCustomProperties.ContainsKey(info.name))
             {
                 if (PositionLocking.IsLocked() && segments.m_buffer[snappedSegmentID].IsStraight() && Vector3.Distance(centerPos, PositionLocking.GetCenterPosition()) < maxDistance + info.m_halfWidth)
                 {
                     centerPos = PositionLocking.GetCenterPosition();
                     centerDirection = PositionLocking.GetCenterDirection();
+                    centerDirection.y = 0; //edit for steep slope problem.
                     Vector3 centerDir = centerDirection.normalized;
+                    
                     float parkingOffset = this.m_parkingWidth;
                     if (PositionLocking.GetLastParkingWidth() > 0 && PositionLocking.GetLastParkingWidth() != this.m_parkingWidth)
                     {
@@ -469,6 +558,73 @@ namespace ParkingLotSnapping
 
                     }
                 }
+                else if (PositionLocking.IsLocked() /*&& PositionLocking.IsLockedOntoACurve() == false*/)
+                {
+                    PositionLocking.DisengageLock();
+                }
+                /*
+                //Locked onto a curved doesn't actually work yet
+                else if (PositionLocking.IsLocked() == true && PositionLocking.IsLockedOntoACurve() == true && segments.m_buffer[snappedSegmentID].IsStraight() == false && Vector3.Distance(centerPos, PositionLocking.GetCenterPosition()) < maxDistance + info.m_halfWidth)
+                {
+                    centerPos = PositionLocking.GetCenterPosition();
+                    centerDirection = PositionLocking.GetCenterDirection();
+                    Vector3 centerDir = centerDirection.normalized;
+                    if (PositionLocking.GetLastParkingWidth() > 0 && PositionLocking.GetLastParkingWidth() != this.m_parkingWidth)
+                    {
+                        PositionLocking.DisengageLock();
+                        //Debug.Log("[PLS].PSAai DisengagingLock Cannot change parking width on curves.");
+                    }
+                    
+                    Vector3 lockedCircularCenterPosition = PositionLocking.GetCurvedLockCircularCenterPosition();
+                    float lockedCircularRadius = PositionLocking.GetCurvedLockCircularRadius();
+                    Vector3 lockedDir = PositionLocking.GetCurvedLockDir();
+                    float lockedDirRadian = Mathf.Atan(lockedDir.z / lockedDir.x);
+                    float radianDifference = PositionLocking.GetCurvedLockRadianDifference();
+                    
+                    Vector3 dirPos = new Vector3(Mathf.Cos(lockedDirRadian+radianDifference), 0, Mathf.Sin(lockedDirRadian + radianDifference));
+                    Vector3 dirNeg = new Vector3(Mathf.Cos(lockedDirRadian - radianDifference), 0, Mathf.Sin(lockedDirRadian - radianDifference));
+                    Debug.Log("[PLS].PSAai Snap to Curved Road dirPos.X = " + dirPos.x.ToString()+ " dirPos.z = " + dirPos.z.ToString());
+                    Debug.Log("[PLS].PSAai Snap to Curved Road dirNeg.X = " + dirNeg.x.ToString() + " dirNeg.z = " + dirNeg.z.ToString());
+                    Vector3 newPosPosition = lockedCircularCenterPosition - dirPos * lockedCircularRadius;
+                    Vector3 newNegPosition = lockedCircularCenterPosition - dirNeg * lockedCircularRadius;
+                    Debug.Log("[PLS].PSAai Snap to Curved Road newPosPosition.X = " + newPosPosition.x.ToString() + " newPosPosition.z = " + newPosPosition.z.ToString());
+                    newPosPosition.y = centerPos.y;
+                    Debug.Log("[PLS].PSAai Snap to Curved Road newNegPosition.X = " + newNegPosition.x.ToString() + " newNegPosition.z = " + newNegPosition.z.ToString());
+                    newNegPosition.y = centerPos.y;
+
+                    Dictionary<Vector3, Vector3> dirDictionary = new Dictionary<Vector3, Vector3>{ { centerPos, lockedDir } };
+                    if (!dirDictionary.ContainsKey(newPosPosition)) dirDictionary.Add(newPosPosition, dirPos);
+                    if (!dirDictionary.ContainsKey(newNegPosition)) dirDictionary.Add(newNegPosition, dirNeg);
+                 
+                    List<Vector3> alternativeCenterPositions = new List<Vector3> {centerPos, newPosPosition, newNegPosition };
+                    float distance = Vector3.Distance(centerPos, refPos);
+                    Debug.Log("[PLS].PSAai Snap to Curved Road CenterPos = " + centerPos.ToString());
+                    foreach (Vector3 alternativePosition in alternativeCenterPositions)
+                    {
+                        float alternativeDistance = Vector3.Distance(alternativePosition, refPos);
+                        Debug.Log("[PLS].PSAai Snap to Curved Road Checking AlternativeCenterPos = " + alternativePosition.ToString());
+                        
+                        if (alternativeDistance < distance)
+                        {
+                            distance = alternativeDistance;
+                            centerPos = alternativePosition;
+                           
+                            if (dirDictionary.ContainsKey(alternativePosition))
+                            {
+                                PositionLocking.SetNextCurvedLockDir(dirDictionary[alternativePosition]);
+                                Debug.Log("[PLS].PSAai dirDictionary[alternativePosition].x = " + dirDictionary[alternativePosition].x.ToString() + "dirDictionary[alternativePosition].z = " + dirDictionary[alternativePosition].z.ToString());
+                                
+                            }
+                            Debug.Log("[PLS].PSAai Snap to Curved Road found AlternativeCenterPos = " + centerPos.ToString());
+                        }
+                    }
+                    if (PositionLocking.IsLocked())
+                    {
+                        info = PositionLocking.GetLockedNetInfo();
+                        PositionLocking.SetNextCenterPosition(centerPos);
+
+                    }
+                }*/ 
                 else if (PositionLocking.IsLocked())
                 {
                     PositionLocking.DisengageLock();
@@ -501,7 +657,7 @@ namespace ParkingLotSnapping
                             Vector3 tempDir = new Vector3(alternativeAislePosition.x - centerPos.x, 0, alternativeAislePosition.z - centerPos.z);
                             tempDir.Normalize();
                             
-                            if (info.m_halfWidth == 8f)
+                            if (ModSettings.PLRCustomProperties[info.name].InvertOffset)
                             {
                                 tempDir *= -1;
                             }
@@ -574,7 +730,7 @@ namespace ParkingLotSnapping
                         PositionLocking.SetSnappedPosition(pos);
                         PositionLocking.SetCenterPosition(centerPos2);
                         PositionLocking.SetCenterDirection(centerDirection2);
-                        PositionLocking.InitiateLock(parkingSpaceAssetAI.m_parkingWidth);
+                        PositionLocking.InitiateLock(parkingSpaceAssetAI.m_parkingWidth, false);
                         //Debug.Log("[PLS]SnapToRoad Snaping to existing asset!");
                     }
                 }
