@@ -48,16 +48,16 @@ namespace ParkingLotSnapping
         //private static float previousCurvedLockRadianDifference;
         //private static Vector3 previousCurvedLockDir;
 
-        public static bool InitiateLock(float parkingWidth, bool curved)
+        public static bool InitiateLock(float parkingWidth, string PSAname)
         {
             //if (curved) return false; //should temporaily stop any curved locking.
 
-            if (locked == false && lastSnappedPosition != null && lastSnappedNetInfo != null && curved == false)
+            if (locked == false && lastSnappedPosition != null && lastSnappedNetInfo != null)
             {
-                
-                if (previousLockPosition != null)
+
+                if (previousLockPosition != null && ModSettings.assetCreatorMode == true)
                 {
-                    //Debug.Log("[PLS]PositionLocking Distance between Locks = " + Vector3.Distance(previousLockPosition, lastSnappedPosition));
+                    Debug.Log("[PLS]PositionLocking Distance between Locks = " + Vector3.Distance(previousLockPosition, lastSnappedPosition) + " for PSA " + PSAname);
                 }
                 lastParkingWidth = parkingWidth;
                 lockPosition = lastSnappedPosition;

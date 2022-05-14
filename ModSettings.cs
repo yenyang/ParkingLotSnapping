@@ -423,11 +423,15 @@ namespace ParkingLotSnapping
         {
             private float m_offset;
             private float m_parkingWidth;
+            private bool m_parralel;
+            private float m_rotation;
 
-            public PSACustomPropertiesStruct(float offset, float parkingWidth)
+            public PSACustomPropertiesStruct(float offset, float parkingWidth, bool parralel, float rotation)
             {
                 this.m_offset = offset;
                 this.m_parkingWidth = parkingWidth;
+                this.m_parralel = parralel;
+                this.m_rotation = rotation;
             }
 
             
@@ -444,59 +448,107 @@ namespace ParkingLotSnapping
                 get { return this.m_parkingWidth; }
                 set { this.m_parkingWidth = value; }
             }
+            public bool Parralel
+            {
+                get { return this.m_parralel; }
+                set { this.m_parralel = value; }
+            }
+            public float Rotation
+            {
+                get { return this.m_rotation; }
+                set { this.m_rotation = value; }
+            }
         }
         public static readonly float perpendicularAsymetricOffset = 5.1f;
+        public static readonly float perpendicularAsymetricOffsetPLR2 = 6.05f;
         public static readonly float angledAsymetricOffset = 6.6f;
+        public static readonly float angledAsymetricOffsetPLR2 = 6.05f;
+        public static readonly float parralelAsymetricOffset = 4.5f;
         public static Dictionary<string, PSACustomPropertiesStruct> PSACustomProperties = new Dictionary<string, PSACustomPropertiesStruct>()
         {
-            {"1x1 Electric Vehicle Parking",    new PSACustomPropertiesStruct(perpendicularAsymetricOffset,       7.72f  ) },
-            {"1x1 Accessible Parking",          new PSACustomPropertiesStruct(perpendicularAsymetricOffset,       9.07f  ) },
-            {"1x1 Parking Lot",                 new PSACustomPropertiesStruct(perpendicularAsymetricOffset,       7.72f  ) },
-            {"1x1 Single Space Parking",        new PSACustomPropertiesStruct(perpendicularAsymetricOffset,       2.58f  ) },
-            {"3x2 Parking Lot",                 new PSACustomPropertiesStruct(0f,                                 23.14f ) },
-            {"4x1 Parking Row",                 new PSACustomPropertiesStruct(perpendicularAsymetricOffset,       33.46f ) },
-            {"4x2 Parking Lot",                 new PSACustomPropertiesStruct(0f,                                 33.46f ) },
-            {"8x2 Parking Lot",                 new PSACustomPropertiesStruct(0f,                                 59.14f ) },
-            {"1x1 Parking Lot - LHD",           new PSACustomPropertiesStruct(angledAsymetricOffset,              5.72f  ) },
-            {"1x1 End Side Left - LHD",         new PSACustomPropertiesStruct(angledAsymetricOffset,              3.25f  ) },
-            {"1x1 Parking Right End - LHD",     new PSACustomPropertiesStruct(angledAsymetricOffset,              3.25f  ) },
-            {"1x1 Accessible Parking - LHD",    new PSACustomPropertiesStruct(angledAsymetricOffset,              7.28f  ) },
-            {"1x1 Single Parking Space - LHD",  new PSACustomPropertiesStruct(angledAsymetricOffset,              2.89f  ) },
-            {"3x2 Parking Lot 60 deg - LHD",    new PSACustomPropertiesStruct(0f,                                 20.05f ) },
-            {"4x1 Parking Lot 60 Degree - LHD", new PSACustomPropertiesStruct(angledAsymetricOffset,              34.39f ) },
-            {"1x1 Parking Lot - RHD",           new PSACustomPropertiesStruct(angledAsymetricOffset,              5.72f  ) },
-            {"1x1 End Side Left - RHD",         new PSACustomPropertiesStruct(angledAsymetricOffset,              3.25f  ) },
-            {"1x1 Parking Right End - RHD",     new PSACustomPropertiesStruct(angledAsymetricOffset,              3.25f  ) },
-            {"1x1 Accessible Parking - RHD",    new PSACustomPropertiesStruct(angledAsymetricOffset,              7.28f  ) },
-            {"1x1 Single Parking Space - RHD",  new PSACustomPropertiesStruct(angledAsymetricOffset,              2.89f  ) },
-            {"3x2 Parking Lot 60 degree - RHD", new PSACustomPropertiesStruct(0f,                                 20.05f ) },
-            {"4x1 Parking Lot 60 Degree - RHD", new PSACustomPropertiesStruct(angledAsymetricOffset,              34.39f ) }
-           
+            {"1x1 Electric Vehicle Parking",        new PSACustomPropertiesStruct(perpendicularAsymetricOffset,         7.72f,      false,  0f  ) },
+            {"1x1 Accessible Parking",              new PSACustomPropertiesStruct(perpendicularAsymetricOffset,         9.07f,      false,  0f  ) },
+            {"1x1 Parking Lot",                     new PSACustomPropertiesStruct(perpendicularAsymetricOffset,         7.72f,      false,  0f  ) },
+            {"1x1 Single Space Parking",            new PSACustomPropertiesStruct(perpendicularAsymetricOffset,         2.58f,      false,  0f  ) },
+            {"3x2 Parking Lot",                     new PSACustomPropertiesStruct(0f,                                   23.14f,     false,  0f ) },
+            {"4x1 Parking Row",                     new PSACustomPropertiesStruct(perpendicularAsymetricOffset,         33.46f,     false,  0f ) },
+            {"4x2 Parking Lot",                     new PSACustomPropertiesStruct(0f,                                   33.46f,     false,  0f ) },
+            {"8x2 Parking Lot",                     new PSACustomPropertiesStruct(0f,                                   59.14f,     false,  0f ) },
+            {"1x1 Parking Lot - LHD",               new PSACustomPropertiesStruct(angledAsymetricOffset,                5.72f,      false,  0f ) },
+            {"1x1 End Side Left - LHD",             new PSACustomPropertiesStruct(angledAsymetricOffset,                3.25f,      false,  0f  ) },
+            {"1x1 Parking Right End - LHD",         new PSACustomPropertiesStruct(angledAsymetricOffset,                3.25f,      false,  0f  ) },
+            {"1x1 Accessible Parking - LHD",        new PSACustomPropertiesStruct(angledAsymetricOffset,                7.28f,      false,  0f  ) },
+            {"1x1 Single Parking Space - LHD",      new PSACustomPropertiesStruct(angledAsymetricOffset,                2.89f,      false,  0f  ) },
+            {"3x2 Parking Lot 60 deg - LHD",        new PSACustomPropertiesStruct(0f,                                   20.05f,     false,  0f ) },
+            {"4x1 Parking Lot 60 Degree - LHD",     new PSACustomPropertiesStruct(angledAsymetricOffset,                34.39f,     false,  0f ) },
+            {"1x1 Parking Lot - RHD",               new PSACustomPropertiesStruct(angledAsymetricOffset,                5.72f,      false,  0f  ) },
+            {"1x1 End Side Left - RHD",             new PSACustomPropertiesStruct(angledAsymetricOffset,                3.25f,      false,  0f  ) },
+            {"1x1 Parking Right End - RHD",         new PSACustomPropertiesStruct(angledAsymetricOffset,                3.25f,      false,  0f  ) },
+            {"1x1 Accessible Parking - RHD",        new PSACustomPropertiesStruct(angledAsymetricOffset,                7.28f,      false,  0f  ) },
+            {"1x1 Single Parking Space - RHD",      new PSACustomPropertiesStruct(angledAsymetricOffset,                2.89f,      false,  0f  ) },
+            {"3x2 Parking Lot 60 degree - RHD",     new PSACustomPropertiesStruct(0f,                                   20.05f,     false,  0f ) },
+            {"4x1 Parking Lot 60 Degree - RHD",     new PSACustomPropertiesStruct(angledAsymetricOffset,                34.39f,     false,  0f ) },
+            {"2 Spots with Planters (Mirrored)",    new PSACustomPropertiesStruct(parralelAsymetricOffset,              24.43f,     true,   90f) },
+            {"4 Spots with Planters (Mirrored)",    new PSACustomPropertiesStruct(parralelAsymetricOffset,              36.80f,     true,   90f) },
+            {"6 Spots with Planters (Mirrored)",    new PSACustomPropertiesStruct(parralelAsymetricOffset,              50.22f,     true,   90f) },
+            {"8 Spots with Planters (Mirrored)",    new PSACustomPropertiesStruct(parralelAsymetricOffset,              62.66f,     true,   90f) },
+            {"10 Spts wth Plntrs EC (Mirrored)",    new PSACustomPropertiesStruct(parralelAsymetricOffset,              79.85f,     true,   90f) },
+            {"10 Spts wth Planters (Mirrored)",     new PSACustomPropertiesStruct(parralelAsymetricOffset,              75.03f,     true,   90f) },
+            {"PLR II - 2 Spots",                    new PSACustomPropertiesStruct(parralelAsymetricOffset,              13.43f,     true,   90f) },
+            {"PLR II - 2 Spots (Mirrored)",         new PSACustomPropertiesStruct(parralelAsymetricOffset,              13.43f,     true,   90f) },
+            {"PLR II - 2 Spots with Planters",      new PSACustomPropertiesStruct(parralelAsymetricOffset,              24.43f,     true,   90f) },
+            {"PLR II - 4 Spots ",                   new PSACustomPropertiesStruct(parralelAsymetricOffset,              25.80f,     true,   90f) },
+            {"PLR II - 4 Spots (Mirrored)",         new PSACustomPropertiesStruct(parralelAsymetricOffset,              25.80f,     true,   90f) },
+            {"PLR II - 4 Spots with Planters",      new PSACustomPropertiesStruct(parralelAsymetricOffset,              36.80f,     true,   90f) },
+            {"PLR II - 6 Spots with Planters",      new PSACustomPropertiesStruct(parralelAsymetricOffset,              50.22f,     true,   90f) },
+            {"PLR II - 8 Spots",                    new PSACustomPropertiesStruct(parralelAsymetricOffset,              50.65f,     true,   90f) },
+            {"PLR II - 8 Spots (mirrored)",         new PSACustomPropertiesStruct(parralelAsymetricOffset,              50.65f,     true,   90f) },
+            {"PLR II - 8 Spots with Planters",      new PSACustomPropertiesStruct(parralelAsymetricOffset,              62.66f,     true,   90f) },
+            {"PLR II - 10 Spots with Planters",     new PSACustomPropertiesStruct(parralelAsymetricOffset,              79.85f,     true,   90f) },
+            {"PLR II - 10 Spts wth Plntrs NEC",     new PSACustomPropertiesStruct(parralelAsymetricOffset,              75.06f,     true,   90f) },
+            {"PLR II - 60° Planters #03",           new PSACustomPropertiesStruct(angledAsymetricOffsetPLR2,            12.05f,     false,  270f) },
+            {"PLR II - 60° Planters #04",           new PSACustomPropertiesStruct(angledAsymetricOffsetPLR2,            24.03f,     false,  270f) },
+            {"PLR II - 60° Planters #02",           new PSACustomPropertiesStruct(angledAsymetricOffsetPLR2,            33.92f,     false,  270f) },
+            {"PLR II - 60° Plain #01",              new PSACustomPropertiesStruct(angledAsymetricOffsetPLR2,            27.50f,     false,  270f) },
+            {"PLR II - 90° Planters #01",           new PSACustomPropertiesStruct(perpendicularAsymetricOffsetPLR2,     33.25f,     false,  270f) },
+            {"PLR II - 90° - Planters #02",         new PSACustomPropertiesStruct(perpendicularAsymetricOffsetPLR2,     61.28f,     false,  270f) },
+            {"PLR II - 90° Planters #03",           new PSACustomPropertiesStruct(perpendicularAsymetricOffsetPLR2,     11.22f,     false,  270f) },
+            {"PLR II - 90° Planters #04",           new PSACustomPropertiesStruct(perpendicularAsymetricOffsetPLR2,     22.44f,     false,  270f) },
+
         };
 
         public static Dictionary<string, PLRCustomPropertiesClass> PLRCustomProperties = new Dictionary<string, PLRCustomPropertiesClass>()
         {
-            {"1285230481.16m Parking Lot_Data",                 new PLRCustomPropertiesClass(new List<float>() {},                  new List<float> { 3f,-3f },         true,   true) },
-            {"1303766506.16m Poorly Maintained Parking_Data",   new PLRCustomPropertiesClass(new List<float>() {},                  new List<float> { 3f,-3f },         true,   true) },
-            {"1285201733.22m Parking Lot_Data",                 new PLRCustomPropertiesClass(new List<float>() {0f},                new List<float> { 0f },             false,  false) },
-            {"1303772884.22m Poorly Maintained Parking_Data",   new PLRCustomPropertiesClass(new List<float>() {0f},                new List<float> { 0f },             false,  false) },
-            {"1285201733.40m Parking Lot_Data",                 new PLRCustomPropertiesClass(new List<float>() {9f,-9f},            new List<float> { 9f, -9f },        false,  false) },
-            {"1303772884.40m Poorly Maintained Parking_Data",   new PLRCustomPropertiesClass(new List<float>() {9f,-9f},            new List<float> { 9f, -9f },        false,  false) },
-            {"1285201733.58m Parking Lot_Data",                 new PLRCustomPropertiesClass(new List<float>() {0f, 18f,-18f},      new List<float> { 0f,18f,-18f},     false,  false) },
-            {"1303772884.58m Poorly Maintained Parking_Data",   new PLRCustomPropertiesClass(new List<float>() {0f, 18f,-18f},      new List<float> { 0f,18f,-18f},     false,  false) },
-            {"1578348250.Tram Road #01_Data",                   new PLRCustomPropertiesClass(new List<float>() {},                  new List<float> { 4.5f, -4.5f },    true,   false) },
-            {"1581742834.Tram Road #02_Data",                   new PLRCustomPropertiesClass(new List<float>() {0f},                new List<float>{ 0f },              false,  false) },
-            {"1423812793.60°/90° Parking Road 2L Urban_Data",   new PLRCustomPropertiesClass(new List<float>() {},                  new List<float> { 1.65f,-1.65f },   true,   false) },
-            {"1426090117.60°/90° Parking Road 2L Suburban_Data",new PLRCustomPropertiesClass(new List<float>() {},                  new List<float> { 1.65f, -1.65f },  true,   false) },
-            {"1608297735.Tram Road#02 - 90° Parking Lots_Data", new PLRCustomPropertiesClass(new List<float>() {0f},                new List<float>{ 0f },              false,  false) },
-            {"1608293777.Tram Road#01 - 90° Parking Lots_Data", new PLRCustomPropertiesClass(new List<float>() {},                  new List<float> { 4.5f, -4.5f },  true,   false) },
-            {"2409968332.US 2L 2W Parking Asym Concr Tree_Data",new PLRCustomPropertiesClass(new List<float>() {},                  new List<float> { 0.15f, -0.15f},   true,   true) },
-            {"2409968332.US 2L 2W Parking Asym Concrete_Data",  new PLRCustomPropertiesClass(new List<float>() {},                  new List<float> { 0.15f, -0.15f},   true,   true) },
-            {"2409968332.US 2L 2W Parking Asym Red_Data",       new PLRCustomPropertiesClass(new List<float>() {},                  new List<float> { 0.15f, -0.15f},   true,   true) },
-            {"2409968332.US 2L 2W Parking Asym Red Tree_Data",  new PLRCustomPropertiesClass(new List<float>() {},                  new List<float> { 0.15f, -0.15f},   true,   true) },
-            {"2409968332.US 2L 2W Parking Sym Concrete_Data",   new PLRCustomPropertiesClass(new List<float>() {0f},                new List<float> { 0f },             false,  false) },
-            {"2409968332.US 2L 2W Parking Sym Red_Data",        new PLRCustomPropertiesClass(new List<float>() {0f},                new List<float> { 0f },             false,  false) },
-            {"Parking Lot 01",                                  new PLRCustomPropertiesClass(new List<float>() {0f},                new List<float> { 0f },             false,  false) },
+            {"1285230481.16m Parking Lot_Data",                 new PLRCustomPropertiesClass(new List<float>() {},                  new List<float> { 3f,-3f },         true,   true,   false) },
+            {"1303766506.16m Poorly Maintained Parking_Data",   new PLRCustomPropertiesClass(new List<float>() {},                  new List<float> { 3f,-3f },         true,   true,   false) },
+            {"1285201733.22m Parking Lot_Data",                 new PLRCustomPropertiesClass(new List<float>() {0f},                new List<float> { 0f },             false,  false,  false) },
+            {"1303772884.22m Poorly Maintained Parking_Data",   new PLRCustomPropertiesClass(new List<float>() {0f},                new List<float> { 0f },             false,  false,  false) },
+            {"1285201733.40m Parking Lot_Data",                 new PLRCustomPropertiesClass(new List<float>() {9f,-9f},            new List<float> { 9f, -9f },        false,  false,  false) },
+            {"1303772884.40m Poorly Maintained Parking_Data",   new PLRCustomPropertiesClass(new List<float>() {9f,-9f},            new List<float> { 9f, -9f },        false,  false,  false) },
+            {"1285201733.58m Parking Lot_Data",                 new PLRCustomPropertiesClass(new List<float>() {0f, 18f,-18f},      new List<float> { 0f,18f,-18f},     false,  false,  false) },
+            {"1303772884.58m Poorly Maintained Parking_Data",   new PLRCustomPropertiesClass(new List<float>() {0f, 18f,-18f},      new List<float> { 0f,18f,-18f},     false,  false,  false) },
+            {"1578348250.Tram Road #01_Data",                   new PLRCustomPropertiesClass(new List<float>() {},                  new List<float> { 4.5f, -4.5f },    true,   false,  false) },
+            {"1581742834.Tram Road #02_Data",                   new PLRCustomPropertiesClass(new List<float>() {0f},                new List<float>{ 0f },              false,  false,  false) },
+            {"1423812793.60°/90° Parking Road 2L Urban_Data",   new PLRCustomPropertiesClass(new List<float>() {},                  new List<float> { 1.65f,-1.65f },   true,   false,  false) },
+            {"1426090117.60°/90° Parking Road 2L Suburban_Data",new PLRCustomPropertiesClass(new List<float>() {},                  new List<float> { 1.65f, -1.65f },  true,   false,  false) },
+            {"1608297735.Tram Road#02 - 90° Parking Lots_Data", new PLRCustomPropertiesClass(new List<float>() {0f},                new List<float>{ 0f },              false,  false,  false) },
+            {"1608293777.Tram Road#01 - 90° Parking Lots_Data", new PLRCustomPropertiesClass(new List<float>() {},                  new List<float> { 4.5f, -4.5f },    true,   false,  false) },
+            {"2409968332.US 2L 2W Parking Asym Concr Tree_Data",new PLRCustomPropertiesClass(new List<float>() {},                  new List<float> { 0.15f, -0.15f},   true,   true,   false) },
+            {"2409968332.US 2L 2W Parking Asym Concrete_Data",  new PLRCustomPropertiesClass(new List<float>() {},                  new List<float> { 0.15f, -0.15f},   true,   true,   false) },
+            {"2409968332.US 2L 2W Parking Asym Red_Data",       new PLRCustomPropertiesClass(new List<float>() {},                  new List<float> { 0.15f, -0.15f},   true,   true,   false) },
+            {"2409968332.US 2L 2W Parking Asym Red Tree_Data",  new PLRCustomPropertiesClass(new List<float>() {},                  new List<float> { 0.15f, -0.15f},   true,   true,   false) },
+            {"2409968332.US 2L 2W Parking Sym Concrete_Data",   new PLRCustomPropertiesClass(new List<float>() {0f},                new List<float> { 0f },             false,  false,  false) },
+            {"2409968332.US 2L 2W Parking Sym Red_Data",        new PLRCustomPropertiesClass(new List<float>() {0f},                new List<float> { 0f },             false,  false,  false) },
+            {"Parking Lot 01",                                  new PLRCustomPropertiesClass(new List<float>() {0f},                new List<float> { 0f },             false,  false,  false) },
+            {"1969112396.PL - Road #01_Data",                   new PLRCustomPropertiesClass(new List<float>() {},                  new List<float> { 0f },             false,   false,  true) },
+            {"1969113204.PL - Road #02_Data",                   new PLRCustomPropertiesClass(new List<float>() {},                  new List<float> { 0f },             false,   false,  true) },
+            {"1971236400.PL - Road #03_Data",                   new PLRCustomPropertiesClass(new List<float>() {},                  new List<float> { 0f },             false,   false,  true) },
+            {"2409941439.US 2L 2W Parking Asym Concr Tree_Data",new PLRCustomPropertiesClass(new List<float>() {},                  new List<float> { 0.15f, -0.15f},   true,   true,   false) },
+            {"2409946015.US 2L 2W Parking Asym Concrete_Data",  new PLRCustomPropertiesClass(new List<float>() {},                  new List<float> { 0.15f, -0.15f},   true,   true,   false) },
+            {"2409955382.US 2L 2W Parking Asym Red_Data",       new PLRCustomPropertiesClass(new List<float>() {},                  new List<float> { 0.15f, -0.15f},   true,   true,   false) },
+            {"2409958009.US 2L 2W Parking Asym Red Tree_Data",  new PLRCustomPropertiesClass(new List<float>() {},                  new List<float> { 0.15f, -0.15f},   true,   true,   false) },
+            {"2409960665.US 2L 2W Parking Sym Concrete_Data",   new PLRCustomPropertiesClass(new List<float>() {0f},                new List<float> { 0f },             false,  false,  false) },
+            {"2409962948.US 2L 2W Parking Sym Red_Data",        new PLRCustomPropertiesClass(new List<float>() {0f},                new List<float> { 0f },             false,  false,  false) },
         };
 
 
@@ -506,13 +558,15 @@ namespace ParkingLotSnapping
             private List<float> m_asymetricAisleOffsets;
             private bool m_onesided;
             private bool m_invertOffset;
+            private bool m_parralel;
             public PLRCustomPropertiesClass() { } // Need in order to make de-serializer work
-            public PLRCustomPropertiesClass(List<float> symetricAisleOffsets, List<float> asymetricAisleOffsets, bool onesided, bool invertOffset)
+            public PLRCustomPropertiesClass(List<float> symetricAisleOffsets, List<float> asymetricAisleOffsets, bool onesided, bool invertOffset, bool parralel)
             {
                 this.m_symetricAisleOffsets = symetricAisleOffsets;
                 this.m_asymetricAisleOffsets = asymetricAisleOffsets;
                 this.m_onesided = onesided;
                 this.m_invertOffset = invertOffset;
+                this.m_parralel = parralel;
             }
             public List<float> SymetricAisleOffsets
             {
@@ -534,6 +588,12 @@ namespace ParkingLotSnapping
             {
                 get { return this.m_invertOffset; }
                 set { this.m_invertOffset = value; }
+            }
+
+            public bool Parralel
+            {
+                get { return this.m_parralel; }
+                set { this.m_parralel = value; }
             }
         }
 

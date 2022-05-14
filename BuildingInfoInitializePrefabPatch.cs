@@ -20,15 +20,16 @@ namespace ParkingLotSnapping
             //Debug.Log("[PLS]BuildingInfoInitializePrefabPatch oldAI.GetType().fullname = " + oldAI.GetType().FullName);
             if (oldAI.GetType() == typeof(DummyBuildingAI) && __instance.name.Length > 17)
             {
-               // Debug.Log("[PLS]BuildingInfoInitializePrefabPatch " + __instance.name +" is DummyBuildingAI");
+                //Debug.Log("[PLS]BuildingInfoInitializePrefabPatch " + __instance.name +" is DummyBuildingAI");
                 
                 string assetName = __instance.name.Remove(__instance.name.Length - 5).Substring(11);
-                //Debug.Log("[PLS]BuildingInfoInitializePrefabPatch assetName = " + assetName);
+                if (ModSettings.assetCreatorMode) Debug.Log("[PLS]BuildingInfoInitializePrefabPatch assetName = " + assetName);
                 bool flag = ModSettings.PSACustomProperties.ContainsKey(assetName);
                 //Debug.Log("[PLS]BuildingInfoInitializePrefabPatch ModSettings.PSACustomProperties.ContainsKey is " + flag);
 
                 if (flag)
                 {
+                    __instance.m_disableSnow = true;
                     ModSettings.PSACustomPropertiesStruct psaCustomProperties = ModSettings.PSACustomProperties.GetValueSafe<String, ModSettings.PSACustomPropertiesStruct>(assetName);
                     //Debug.Log("[PLS]BuildingInfoInitializePrefabPatch " + psa.Key + " found!");
                     UnityEngine.Object.DestroyImmediate(oldAI);
@@ -69,6 +70,13 @@ namespace ParkingLotSnapping
                                     else if (fieldInfo.Name == "m_parkingWidth")
                                     {
                                         newAIField.SetValue(newAI, psaCustomProperties.ParkingWidth);
+                                    } else if (fieldInfo.Name == "m_rotation")
+                                    {
+                                        newAIField.SetValue(newAI, psaCustomProperties.Rotation);
+                                    }
+                                    else if (fieldInfo.Name == "m_parralel")
+                                    {
+                                        newAIField.SetValue(newAI, psaCustomProperties.Parralel);
                                     }
                                     //Debug.Log("[PLS]BuildingInfoInitializePrefabPatch Ready to set fieldInfo Named " + fieldInfo.Name);
                                     //newAIField.SetValue(newAI, fieldInfo.GetValue(src));
