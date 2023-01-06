@@ -19,7 +19,11 @@ namespace ParkingLotSnapping
         {
 
             base.OnCreated(loading);
-           
+            if (ModSettings.ImportXMLonStartUp && ModSettings.PSACustomProperties != null && ModSettings.PLRCustomProperties != null)
+            {
+                string results = ModSettings.DeserializeXML();
+                Debug.Log("[PLS]LoadingFunction.onCreated " + results);
+            }
             
             if (CitiesHarmony.API.HarmonyHelper.IsHarmonyInstalled) Patcher.PatchAll();
         }

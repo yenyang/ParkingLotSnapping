@@ -47,6 +47,7 @@ namespace ParkingLotSnapping
         //private static float previousCurvedLockCircularRadius;
         //private static float previousCurvedLockRadianDifference;
         //private static Vector3 previousCurvedLockDir;
+        private static float raisableLockedY;
 
         public static bool InitiateLock(float parkingWidth, string PSAname)
         {
@@ -55,9 +56,12 @@ namespace ParkingLotSnapping
             if (locked == false && lastSnappedPosition != null && lastSnappedNetInfo != null)
             {
 
-                if (previousLockPosition != null && ModSettings.assetCreatorMode == true)
+                if (previousLockPosition != null && ModSettings.AssetCreatorMode == true)
                 {
-                    Debug.Log("[PLS]PositionLocking Distance between Locks = " + Vector3.Distance(previousLockPosition, lastSnappedPosition) + " for PSA " + PSAname);
+                    //if (lastParkingWidth == previousLockParkingWidth)
+                        Debug.Log("[PLS]PositionLocking Distance between Locks = " + Vector3.Distance(previousLockPosition, lastSnappedPosition) + " for PSA " + PSAname);
+                    //else 
+
                 }
                 lastParkingWidth = parkingWidth;
                 lockPosition = lastSnappedPosition;
@@ -333,6 +337,15 @@ namespace ParkingLotSnapping
                 return true;
             }
             return false;
+        }
+
+        public static float GetRaisableLockedY()
+        {
+            return raisableLockedY;
+        }
+        public static void SetRaisableLockedY(float y)
+        {
+            raisableLockedY = y;
         }
     }
 }

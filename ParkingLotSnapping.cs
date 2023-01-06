@@ -12,9 +12,10 @@ namespace ParkingLotSnapping
     public class ParkingLotSnap : IUserMod
     {
         public string Name { get { return "Parking Lot Snapping"; } }
-        public string Description { get { return "Allows for quick production of functional parking lots without anarchy. Mod By [SSU]yenyang. Parking lots by Badi_Dea"; } }
+        public string Description { get { return "Allows for quick production of functional parking lots without anarchy. Mod By [SSU]yenyang. Parking lots by others"; } }
+
         public UIButton DeleteAssetsButton;
-        public UIButton ExportXMLButton; // JUST FOR TEST?!
+        public UIButton ExportXMLButton;
         public UIButton ResetButton;
 
         public UIButton ResetSnappingGrid;
@@ -26,11 +27,21 @@ namespace ParkingLotSnapping
         public UISlider UnlockDistanceSlider;
         public UICheckBox KeyboardShortcutsHintsCheckBox;
         public UICheckBox OverrideWarningCheckBox;
+        public UICheckBox UndoDisengagesLockCheckBox;
         public UICheckBox DisableTooltipsCheckBox;
         public UICheckBox BulldozeEffectCheckBox;
         public UIButton UnlockSnappingKeybindButton;
         public UIButton ReturnLastSnappingKeybindButton;
         public UIButton UndoKeybindButton;
+        public UIButton LockOnToPSAKeybindButton;
+
+        public UICheckBox AssetCreatorModeCheckBox;
+        static public UITextField ExportErrorTextField;
+        static public UITextField ImportErrorTextField;
+        public UITextField FolderPathTextField;
+        public UIButton ImportXMLButton;
+        public UICheckBox ImportXMLOnGameStartCheckBox;
+
 
         public ParkingLotSnap()
         {
@@ -46,12 +57,16 @@ namespace ParkingLotSnapping
         }
         public void OnSettingsUI(UIHelperBase helper)
         {
+            
+            
             UIHelperBase group = helper.AddGroup("General Options");
-            PassElectricityCheckBox = group.AddCheckbox("Pass Electricity", ModSettings.PassElectricity, OnPassElectricityCheckBoxChanged) as UICheckBox;
+            
             AllowSnappingCheckBox = group.AddCheckbox("Allow Snapping", ModSettings.AllowSnapping, OnAllowSnappingCheckBoxChanged) as UICheckBox;
             AllowLockingCheckBox = group.AddCheckbox("Allow Locking", ModSettings.AllowLocking, OnAllowLockingCheckBoxChanged) as UICheckBox;
             OverrideOverlappingCheckBox = group.AddCheckbox("Override Overlapping Parking Space Assets", ModSettings.OverrideOverlapping, OnOverrideOverlappingCheckBox) as UICheckBox;
             BulldozeEffectCheckBox = group.AddCheckbox("Play In-Game Bulldoze Effect when Undoing", ModSettings.BulldozeEffect, OnBulldozeEffectCheckBoxChanged) as UICheckBox;
+            PassElectricityCheckBox = group.AddCheckbox("Pass Electricity", ModSettings.PassElectricity, OnPassElectricityCheckBoxChanged) as UICheckBox;
+            UndoDisengagesLockCheckBox = group.AddCheckbox("Undo Disengages Lock", ModSettings.UndoDisengagesLock, OnUndoDisengagesLockCheckBoxChanged) as UICheckBox;
 
             SnappingDistanceSlider = group.AddSlider("Snapping Distance", (float)ModSettings._minSnappingDistance, (float)ModSettings._maxSnappingDistance, (float)ModSettings._snappingStep, (float)ModSettings._defaultSnappingDistance, OnSnappingDistanceChanged) as UISlider;
             SnappingDistanceSlider.tooltip = ((float)ModSettings.SnappingDistance).ToString() + " units";
@@ -61,9 +76,9 @@ namespace ParkingLotSnapping
             UnlockDistanceSlider.width += 100;
 
             UIHelperBase tooltipgroup = helper.AddGroup("Tooltip Options");
-            KeyboardShortcutsHintsCheckBox = tooltipgroup.AddCheckbox("Keyboard Shortcuts Hints", ModSettings.KeyboardShortcutHints, OnPassElectricityCheckBoxChanged) as UICheckBox;
-            OverrideWarningCheckBox = tooltipgroup.AddCheckbox("Overlapping/Overriding Warnings", ModSettings.OverrideWarning, OnPassElectricityCheckBoxChanged) as UICheckBox;
-            DisableTooltipsCheckBox = tooltipgroup.AddCheckbox("Disable Tooltips", ModSettings.DisableTooltips, OnPassElectricityCheckBoxChanged) as UICheckBox;
+            KeyboardShortcutsHintsCheckBox = tooltipgroup.AddCheckbox("Keyboard Shortcuts Hints", ModSettings.KeyboardShortcutHints, OnKeyboardShortcutsHintsCheckBoxChanged) as UICheckBox;
+            OverrideWarningCheckBox = tooltipgroup.AddCheckbox("Overlapping/Overriding Warnings", ModSettings.OverrideWarning, OnOverrideWarningCheckBoxChanged) as UICheckBox; 
+            DisableTooltipsCheckBox = tooltipgroup.AddCheckbox("Disable Tooltips", ModSettings.DisableTooltips, OnDisableTooltipsCheckBoxChanged) as UICheckBox; 
 
             // Key bindings section
             //Need UIhelper class, not UIHelperBase, it's ok because the game uses UIHelper anyway
@@ -73,6 +88,8 @@ namespace ParkingLotSnapping
             UnlockSnappingKeybindButton = ModKeyBindingFunctions.AddKeyMappingUI(keyBindingGroup, "Unlock From Current Snapping", ModSettings.UnlockKeybind);
             ReturnLastSnappingKeybindButton = ModKeyBindingFunctions.AddKeyMappingUI(keyBindingGroup, "Re-Lock to Last Locked Position", ModSettings.ReturnLockKeybind);
             UndoKeybindButton = ModKeyBindingFunctions.AddKeyMappingUI(keyBindingGroup, "Undo Last Placement", ModSettings.UndoKeybind);
+            LockOnToPSAKeybindButton = ModKeyBindingFunctions.AddKeyMappingUI(keyBindingGroup, "Lock-on to Existing Parking Space Asset", ModSettings.LockOnToPSAKeybind);
+
 
             UIHelperBase resetGroup = helper.AddGroup("Reset");
             ResetSnappingGrid = resetGroup.AddButton("Reset Snapping Grid", resetSnappingGrid) as UIButton;
@@ -81,9 +98,24 @@ namespace ParkingLotSnapping
             UIHelperBase SafelyRemoveAutoParkingLotsGroup = helper.AddGroup("Safely Remove Parking Lot Snapping");
             DeleteAssetsButton = SafelyRemoveAutoParkingLotsGroup.AddButton("Delete Parking Lot Snapping Assets", deleteAllAssets) as UIButton;
 
-            // Just for testing!!!!!!!!!!!!!!!!!!!!!!! Will be deleted (Unless you want to keep so asset creators can reference
-            //UIHelperBase ExportsampleXML = helper.AddGroup("Generate Sample PLR XML");
-            //ExportXMLButton = ExportsampleXML.AddButton("Export sample XML for cusrom PLR properties", exportSampleXML) as UIButton;
+            UIHelperBase XMLGroup = helper.AddGroup("Advanced Options");
+            AssetCreatorModeCheckBox = XMLGroup.AddCheckbox("Asset Creator Mode", ModSettings.AssetCreatorMode, OnAssetCreatorModeCheckBoxChanged) as UICheckBox;
+
+            FolderPathTextField = XMLGroup.AddTextfield("Folder Path", ModSettings.FolderPath, OnFolderPathChanged) as UITextField;
+            FolderPathTextField.width += 475;
+
+            ExportXMLButton = XMLGroup.AddButton("Export PSA/PLR properties", ExportXML) as UIButton;
+            ExportErrorTextField = XMLGroup.AddTextfield("Export Errors", "", OnErrorTextChanged) as UITextField;
+            ExportErrorTextField.width += 250;
+            ExportErrorTextField.isInteractive = false;
+
+            ImportXMLButton = XMLGroup.AddButton("Import PSA/PLR properties", ImportXML) as UIButton;
+            ImportErrorTextField = XMLGroup.AddTextfield("Import Errors", "", OnErrorTextChanged) as UITextField;
+            ImportErrorTextField.width += 250;
+            ImportErrorTextField.isInteractive = false;
+
+            ImportXMLOnGameStartCheckBox = XMLGroup.AddCheckbox("Import On Game Start", ModSettings.ImportXMLonStartUp, OnImportXMLonStartUpCheckBoxChanged) as UICheckBox; //Need to implement on startup routine.
+            
         }
         private void OnPassElectricityCheckBoxChanged(bool val)
         {
@@ -109,6 +141,14 @@ namespace ParkingLotSnapping
         {
             ModSettings.AllowLocking = (bool)val;
         }
+        private void OnImportXMLonStartUpCheckBoxChanged(bool val)
+        {
+            ModSettings.ImportXMLonStartUp = (bool)val;
+        }
+        private void OnUndoDisengagesLockCheckBoxChanged(bool val)
+        {
+            ModSettings.UndoDisengagesLock = (bool)val;
+        }
         private void OnOverrideOverlappingCheckBox(bool val)
         {
             ModSettings.OverrideOverlapping = (bool)val;
@@ -116,6 +156,10 @@ namespace ParkingLotSnapping
         private void OnBulldozeEffectCheckBoxChanged(bool val)
         {
             ModSettings.BulldozeEffect = (bool)val;
+        }
+        private void OnAssetCreatorModeCheckBoxChanged(bool val)
+        {
+            ModSettings.AssetCreatorMode = (bool)val;
         }
         private void OnSnappingDistanceChanged(float val)
         {
@@ -131,9 +175,13 @@ namespace ParkingLotSnapping
             UnlockDistanceSlider.tooltipBox.Show();
             UnlockDistanceSlider.RefreshTooltip();
         }
+        private void OnFolderPathChanged(string text)
+        {
+            ModSettings.FolderPath = text;
+        }
         private void resetSettings()
         {
-            
+
             ModSettings.resetModSettings();
             PassElectricityCheckBox.isChecked = ModSettings.PassElectricity;
             AllowLockingCheckBox.isChecked = ModSettings.AllowLocking;
@@ -144,19 +192,24 @@ namespace ParkingLotSnapping
             UnlockDistanceSlider.value = ModSettings.UnlockingDistance;
             KeyboardShortcutsHintsCheckBox.isChecked = ModSettings.KeyboardShortcutHints;
             OverrideWarningCheckBox.isChecked = ModSettings.OverrideWarning;
+            UndoDisengagesLockCheckBox.isChecked = ModSettings.UndoDisengagesLock;
             DisableTooltipsCheckBox.isChecked = ModSettings.DisableTooltips;
             UnlockSnappingKeybindButton.text = ModSettings.UnlockKeybind.ToLocalizedString("KEYNAME");
             ReturnLastSnappingKeybindButton.text = ModSettings.ReturnLockKeybind.ToLocalizedString("KEYNAME");
             UndoKeybindButton.text = ModSettings.UndoKeybind.ToLocalizedString("KEYNAME");
+            LockOnToPSAKeybindButton.text = ModSettings.LockOnToPSAKeybind.ToLocalizedString("KEYNAME");
+            AssetCreatorModeCheckBox.isChecked = ModSettings.AssetCreatorMode;
+            FolderPathTextField.text = ModSettings.FolderPath;
+            ImportXMLOnGameStartCheckBox.isChecked = ModSettings.ImportXMLonStartUp;
         }
-        private void resetSnappingGrid()
+        private static void resetSnappingGrid()
         {
             if (ParkingSpaceGrid.areYouAwake() == true)
             {
                 ParkingSpaceGrid.Awake();
             }
         }
-        private void deleteAllAssets()
+        private static void deleteAllAssets()
         {
             if (LoadingFunctions.Loaded == true)
             {
@@ -172,7 +225,8 @@ namespace ParkingLotSnapping
                             // Debug.Log("[RF].Hydrology  Failed Flag Test: " + _buildingManager.m_buildings.m_buffer[id].m_flags.ToString());
 
                         }
-                        else {
+                        else
+                        {
                             BuildingAI ai = _buildingManager.m_buildings.m_buffer[id].Info.m_buildingAI;
                             if (ai is ParkingSpaceAssetAI)
                             {
@@ -189,10 +243,19 @@ namespace ParkingLotSnapping
             }
 
         }
-        private void exportSampleXML()
+        private static void ExportXML()
         {
-            // What this does is serialize a random road with properties, to check out the XML
-            ModSettings.SerializePLRProperties(ModSettings.PLRCustomProperties["1285201733.58m Parking Lot_Data"]);
+            ExportErrorTextField.text = ModSettings.SerializeXML();
         }
+        private static void ImportXML()
+        {
+            ImportErrorTextField.text = ModSettings.DeserializeXML();
+        }
+
+        private void OnErrorTextChanged(string text)
+        {
+
+        }
+
     }
 }

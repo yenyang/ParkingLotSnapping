@@ -12,19 +12,7 @@ namespace ParkingLotSnapping
 {
     class ParkingSpaceAssetAI : DummyBuildingAI
     {
-        [CustomizableProperty("Offset", "Parking Space Asset")]
-        public float m_offset = 0f;
-
-
-        [CustomizableProperty("ParkingWidth", "Parking Space Asset")]
-        public float m_parkingWidth = 0;
-
-        [CustomizableProperty("Rotation", "Parking Space Asset")]
-        public float m_rotation = 0;
-
-        [CustomizableProperty("Parralel", "Parking Space Asset")]
-        public bool m_parralel = false;
-
+       
         public override bool IgnoreBuildingCollision()
         {
             return true;
@@ -48,14 +36,34 @@ namespace ParkingLotSnapping
         }
         public override void CreateBuilding(ushort buildingID, ref Building data)
         {
-            Building currentBuilding = BuildingManager.instance.m_buildings.m_buffer[buildingID];
-            currentBuilding.Info.m_autoRemove = true;
-            currentBuilding.Info.m_placementMode = BuildingInfo.PlacementMode.OnTerrain;
+            if (!ModSettings.PSACustomProperties.ContainsKey(this.m_info.name))
+            {
+                Debug.Log("[PLS].PSAai.CreateBuilding PSA Custom Properties does not contain " + this.m_info.name);
+                return;
+            }
+            
+            data.Info.m_autoRemove = true;
+            
+            if (ModSettings.PSACustomProperties[this.m_info.name].Raisable == false)
+            {
+                data.Info.m_placementMode = BuildingInfo.PlacementMode.OnTerrain;
+            } else
+            {
+                data.Info.m_placementMode = BuildingInfo.PlacementMode.OnGround;
+                if (PositionLocking.GetRaisableLockedY() != 0)
+                {
+                    //Debug.Log("[RF]PSAai.createBuilding data.m_position.y = " + data.m_position.y.ToString() + " PositionLocking.GetRaisableLockedY() = " + PositionLocking.GetRaisableLockedY().ToString());
+                    Vector3 newPosition = new Vector3(data.m_position.x, PositionLocking.GetRaisableLockedY(), data.m_position.z);
+                    data.m_flags = data.m_flags | Building.Flags.FixedHeight;
+
+                    ElevateBuilding(buildingID, ref data, newPosition, data.m_angle);
+                }
+            }
             if (ParkingSpaceGrid.areYouAwake() == false)
             {
                 ParkingSpaceGrid.Awake();
             }
-            ushort overlappedPSA = ParkingSpaceGrid.CheckGrid(currentBuilding.m_position);
+            ushort overlappedPSA = ParkingSpaceGrid.CheckGrid(data.m_position);
             if (overlappedPSA != 0 && ModSettings.OverrideOverlapping) {
                 try
                 {
@@ -73,7 +81,7 @@ namespace ParkingLotSnapping
                     NetSegment lastSnappedSegment = NetManager.instance.m_segments.m_buffer[PositionLocking.GetLastSnappedSegmentID()];
                     if (lastSnappedSegment.IsStraight())
                     {
-                        PositionLocking.InitiateLock(this.m_parkingWidth, currentBuilding.Info.name);
+                        PositionLocking.InitiateLock(ModSettings.PSACustomProperties[this.m_info.name].ParkingWidth, data.Info.name);
                     }/* else
                     {
                         bool curvedLock = PositionLocking.InitiateLock(this.m_parkingWidth, true);
@@ -87,7 +95,7 @@ namespace ParkingLotSnapping
             }
             else
             {
-                PositionLocking.AddParkingSpaceAsset(this.m_parkingWidth);
+                PositionLocking.AddParkingSpaceAsset(ModSettings.PSACustomProperties[this.m_info.name].ParkingWidth);
                 //Debug.Log("[PLS]PSAai CreateBuilding adding link in PSA chain!");
             }
 
@@ -138,9 +146,10 @@ namespace ParkingLotSnapping
             {
                 PositionLocking.returnToPreviousLockPosition();
             }
-            if (ModSettings.AllowSnapping)
+            if (ModSettings.AllowSnapping && ModSettings.PSACustomProperties.ContainsKey(this.m_info.name))
             {
-                if (this.m_offset == 0f)
+                
+                if (ModSettings.PSACustomProperties[this.m_info.name].Offset == 0f)
                 {
                     float snapDistance = (float)ModSettings.SnappingDistance;
                     if (PositionLocking.IsLocked())
@@ -153,7 +162,11 @@ namespace ParkingLotSnapping
                         angle = Mathf.Atan2(finalAngle.x, -finalAngle.z);
                         position.x = finalPosition.x;
                         position.z = finalPosition.z;
-
+                        if (ModSettings.PSACustomProperties[this.m_info.name].Raisable)
+                        {
+                            position.y = finalPosition.y;
+                            PositionLocking.SetRaisableLockedY(finalPosition.y);
+                        }
 
                     }
                     else if (PositionLocking.IsLocked())
@@ -173,6 +186,11 @@ namespace ParkingLotSnapping
                         angle = Mathf.Atan2(finalAngle.x, -finalAngle.z);
                         position.x = finalPosition.x;
                         position.z = finalPosition.z;
+                        if (ModSettings.PSACustomProperties[this.m_info.name].Raisable)
+                        {
+                            position.y = finalPosition.y;
+                            PositionLocking.SetRaisableLockedY(finalPosition.y);
+                        }
                     }
                     else if (PositionLocking.IsLocked())
                     {
@@ -197,6 +215,11 @@ namespace ParkingLotSnapping
             bool result = false;
             pos = refPos;
             dir = Vector3.forward;
+            if (!ModSettings.PSACustomProperties.ContainsKey(this.m_info.name))
+            {
+                Debug.Log("[PLS].PSAai.SnapToRoad PSA Custom Properties does not contain " + this.m_info.name);
+                return false;
+            }
             float additionalDistance = 100f;
             float minX = refPos.x - maxDistance - additionalDistance;
             float minZ = refPos.z - maxDistance - additionalDistance;
@@ -212,6 +235,7 @@ namespace ParkingLotSnapping
             NetInfo info = new NetInfo();
             Array16<NetSegment> segments = Singleton<NetManager>.instance.m_segments;
             ushort[] segmentGrid = Singleton<NetManager>.instance.m_segmentGrid;
+            List<ushort> potentialInfoIds = new List<ushort>();
             float potentialMaxDistance = maxDistance;
             for (int i = minZint; i <= maxZint; i++)
             {
@@ -239,15 +263,16 @@ namespace ParkingLotSnapping
                                     //Debug.Log("[APL].PSAAI.Snap to Road info.m_halfwidth = " + info.m_halfWidth.ToString());
                                     if (distanceToRoad < potentialMaxDistance && ModSettings.PLRCustomProperties.ContainsKey(potentialInfo.name))
                                     {
-                                        potentialMaxDistance = distanceToRoad;
-                                        snappedSegmentID = segmentGridZX;
-                                        centerPos = potentialCenterPos;
-                                        centerDirection = potentialCenterDirection;
-                                        info = potentialInfo;
-                                        result = true;
+                                        if (ModSettings.PSACustomProperties[this.name].Raisable == true || ModSettings.PSACustomProperties[this.name].Raisable == false && potentialInfo.m_netAI is RoadAI)
+                                        {
+                                            potentialMaxDistance = distanceToRoad;
+                                            snappedSegmentID = segmentGridZX;
+                                            centerPos = potentialCenterPos;
+                                            centerDirection = potentialCenterDirection;
+                                            info = potentialInfo;
+                                            result = true;
+                                        }
                                     }
-
-
                                 }
                             }
                         }
@@ -268,10 +293,10 @@ namespace ParkingLotSnapping
                     centerDirection = PositionLocking.GetCenterDirection();
                     centerDirection.y = 0; //edit for steep slope problem
                     Vector3 centerDir = centerDirection.normalized;
-                    float parkingOffset = this.m_parkingWidth;
-                    if (PositionLocking.GetLastParkingWidth() > 0 && PositionLocking.GetLastParkingWidth() != this.m_parkingWidth)
+                    float parkingOffset = ModSettings.PSACustomProperties[this.m_info.name].ParkingWidth;
+                    if (PositionLocking.GetLastParkingWidth() > 0 && PositionLocking.GetLastParkingWidth() != ModSettings.PSACustomProperties[this.m_info.name].ParkingWidth)
                     {
-                        parkingOffset = this.m_parkingWidth / 2 + PositionLocking.GetLastParkingWidth() / 2;
+                        parkingOffset = ModSettings.PSACustomProperties[this.m_info.name].ParkingWidth / 2 + PositionLocking.GetLastParkingWidth() / 2;
                         //Debug.Log("[PLS].PSAai Snap to Road Now Parking Offset = " + parkingOffset);
                     }
 
@@ -305,9 +330,9 @@ namespace ParkingLotSnapping
                 
                 Vector3 vector2 = new Vector3(centerDirection.z, 0f, -centerDirection.x);
                 dir = vector2.normalized;
-                List<float> PLRsymetricAisleOffsets = ModSettings.PLRCustomProperties[info.name].SymetricAisleOffsets;
+                List<float> PLRsymmetricAisleOffsets = ModSettings.PLRCustomProperties[info.name].SymmetricAisleOffsets;
                 float distance2 = maxDistance + info.m_halfWidth;
-                foreach (float offset in PLRsymetricAisleOffsets)
+                foreach (float offset in PLRsymmetricAisleOffsets)
                 {
                     Vector3 alternativePosition = centerPos + dir * offset;
                     float alternativeDistance = Vector3.Distance(alternativePosition, refPos);
@@ -367,7 +392,7 @@ namespace ParkingLotSnapping
                         PositionLocking.SetSnappedPosition(pos);
                         PositionLocking.SetCenterPosition(centerPos2);
                         PositionLocking.SetCenterDirection(centerDirection2);
-                        PositionLocking.InitiateLock(parkingSpaceAssetAI.m_parkingWidth, currentBuilding.Info.name);
+                        PositionLocking.InitiateLock(ModSettings.PSACustomProperties[this.m_info.name].ParkingWidth, currentBuilding.Info.name);
                         //Debug.Log("[PLS]SnapToRoad Snaping to existing asset!");
                     }
                 }
@@ -377,8 +402,14 @@ namespace ParkingLotSnapping
         private bool SnapToOneSide(Vector3 refPos, out Vector3 pos, out Vector3 dir, float maxDistance)
         {
             bool result = false;
+         
             pos = refPos;
             dir = Vector3.forward;
+            if (!ModSettings.PSACustomProperties.ContainsKey(this.m_info.name))
+            {
+                Debug.Log("[PLS].PSAai.SnapToOneSide PSA Custom Properties does not contain " + this.m_info.name);
+                return false;
+            }
             float minX = refPos.x - maxDistance - 100f;
             float minZ = refPos.z - maxDistance - 100f;
             float maxX = refPos.x + maxDistance + 100f;
@@ -392,7 +423,9 @@ namespace ParkingLotSnapping
             Vector3 centerPos = new Vector3();
             Vector3 centerDirection = Vector3.forward;
             int snappedSegmentID = 0;
+            List<ushort> potentialInfoIds = new List<ushort>();
             float potentialMaxDistance = maxDistance;
+            //float potentialMinHeight = 0f;
             NetInfo info = new NetInfo();
             for (int i = minZint; i <= maxZint; i++)
             {
@@ -402,13 +435,15 @@ namespace ParkingLotSnapping
                     int iterator = 0;
                     while (segmentGridZX != 0)
                     {
+                        
                         NetSegment.Flags flags = segments.m_buffer[(int)segmentGridZX].m_flags;
                         if ((flags & (NetSegment.Flags.Created | NetSegment.Flags.Deleted)) == NetSegment.Flags.Created)
                         {
                             NetInfo potentialInfo = segments.m_buffer[(int)segmentGridZX].Info;
-                                
-                            if (ModSettings.PLRCustomProperties.ContainsKey(potentialInfo.name) || ModSettings.assetCreatorMode == true && ModSettings.unacceptableInfoNames.Contains(potentialInfo.name) == false && potentialInfo.m_netAI is RoadAI)
+                            
+                            if (ModSettings.PLRCustomProperties.ContainsKey(potentialInfo.name) || ModSettings.AssetCreatorMode == true && ModSettings.unacceptableInfoNames.Contains(potentialInfo.name) == false /*&& potentialInfo.m_netAI is RoadAI*/)
                             {
+                                
                                 Vector3 min = segments.m_buffer[(int)segmentGridZX].m_bounds.min;
                                 Vector3 max = segments.m_buffer[(int)segmentGridZX].m_bounds.max;
                                 if (min.x < maxX && min.z < maxZ && max.x > minX && max.z > minZ)
@@ -416,26 +451,28 @@ namespace ParkingLotSnapping
                                     Vector3 potentialCenterPos;
                                     Vector3 potentialCenterDirection;
                                     segments.m_buffer[(int)segmentGridZX].GetClosestPositionAndDirection(refPos, out potentialCenterPos, out potentialCenterDirection);
-                                
+
                                     float distanceToRoad = Vector3.Distance(potentialCenterPos, refPos) - potentialInfo.m_halfWidth;
-                                    bool parralelRoadCheck = true;
+                                    bool parallelRoadCheck = true;
                                     if (ModSettings.PLRCustomProperties.ContainsKey(potentialInfo.name))
                                     {
-                                        if (ModSettings.PLRCustomProperties[potentialInfo.name].Parralel && !this.m_parralel)
+                                        if (ModSettings.PLRCustomProperties[potentialInfo.name].Parallel && !ModSettings.PSACustomProperties[this.m_info.name].Parallel)
                                         {
-                                            parralelRoadCheck = false;
+                                            parallelRoadCheck = false;
                                         }
                                     }
-                                    if (distanceToRoad < potentialMaxDistance && ModSettings.PLRCustomProperties.ContainsKey(potentialInfo.name) && parralelRoadCheck || distanceToRoad < potentialMaxDistance && ModSettings.assetCreatorMode == true && ModSettings.unacceptableInfoNames.Contains(potentialInfo.name) == false && potentialInfo.m_netAI is RoadAI)
+                                    if (distanceToRoad < potentialMaxDistance && ModSettings.PLRCustomProperties.ContainsKey(potentialInfo.name) && parallelRoadCheck || distanceToRoad < potentialMaxDistance && ModSettings.AssetCreatorMode == true && ModSettings.unacceptableInfoNames.Contains(potentialInfo.name) == false)
                                     {
-                                        potentialMaxDistance = distanceToRoad;
-                                        snappedSegmentID = segmentGridZX;
-                                        centerPos = potentialCenterPos;
-                                        centerDirection = potentialCenterDirection;
-                                        info = potentialInfo;
-                                        result = true;
+                                        if (ModSettings.PSACustomProperties[this.name].Raisable == true || ModSettings.PSACustomProperties[this.name].Raisable == false && potentialInfo.m_netAI is RoadAI || ModSettings.AssetCreatorMode == true)
+                                        {
+                                            potentialMaxDistance = distanceToRoad;
+                                            snappedSegmentID = segmentGridZX;
+                                            centerPos = potentialCenterPos;
+                                            centerDirection = potentialCenterDirection;
+                                            info = potentialInfo;
+                                            result = true;
+                                        }
                                     }
-
                                 }
                             } 
                             
@@ -451,9 +488,10 @@ namespace ParkingLotSnapping
                 }
             }
             /*asset Creator mod*/
-            if (result == true && ModSettings.assetCreatorMode == true && ModSettings.unacceptableInfoNames.Contains(info.name) == false && info.m_netAI is RoadAI && info.name != ModSettings.lastAssetCreatorModeInfo)
+            if (result == true && ModSettings.AssetCreatorMode == true && ModSettings.unacceptableInfoNames.Contains(info.name) == false /*&& info.m_netAI is RoadAI*/ && info.name != ModSettings.lastAssetCreatorModeInfo && !ModSettings.PLRCustomProperties.ContainsKey(info.name))
             {
-
+                Debug.Log("[PLS].SnapToOneSide refpos.y = " + refPos.y.ToString());
+                Debug.Log("[PLS].SnapToOneSide centerPos.y = " + centerPos.y.ToString());
                 Debug.Log("[PLS].Parking Lot Snapping Asset Creator Mode Log : " + info.name);
                 List<float> laneOffsets = new List<float>();
                 List<NetInfo.Lane> carLanes = new List<NetInfo.Lane>();
@@ -464,29 +502,28 @@ namespace ParkingLotSnapping
                     if ((lane.m_vehicleType & VehicleInfo.VehicleType.Car) != 0)
                     {
                         Debug.Log("[PLS].Parking Lot Snapping Asset Creator Mode Log : lane offset = " + lane.m_position.ToString() + " lane type = " + lane.m_vehicleType.ToString() + " lane direction = " + lane.m_direction.ToString());
-
-                        laneOffsets.Add(lane.m_position);
-                        carLanes.Add(lane);
-                        offsetAndDirection.Add(lane.m_position, lane.m_direction);
+                        if (!laneOffsets.Contains(lane.m_position)) laneOffsets.Add(lane.m_position);
+                        if (!carLanes.Contains(lane)) carLanes.Add(lane);
+                        if (!offsetAndDirection.ContainsKey(lane.m_position))    offsetAndDirection.Add(lane.m_position, lane.m_direction);
                     }
                     
                 }
                 if (laneOffsets.Count >= 2)
                 {
-                    List<float> symetricAisleOffsets = new List<float>();
-                    List<float> asymetricAisleOffsets = new List<float>();
+                    List<float> symmetricAisleOffsets = new List<float>();
+                    List<float> asymmetricAisleOffsets = new List<float>();
                     bool onesided = false;
                     bool invertOffset = false;
                     float roadwayMaxSeperation = 4f;
-                    float asymetricOffsetAmount = 1.5f;
+                    float asymmetricOffsetAmount = 1.5f;
                     if (laneOffsets.Min() >= 0 || laneOffsets.Max() <= 0)
                     {
                         onesided = true;
                         invertOffset = true;
                         if (laneOffsets.Count == 2)
                         {
-                            asymetricAisleOffsets.Add(laneOffsets.Average());
-                            asymetricAisleOffsets.Add(-1*laneOffsets.Average());
+                            if (!asymmetricAisleOffsets.Contains(laneOffsets.Average()))     asymmetricAisleOffsets.Add(laneOffsets.Average());
+                            if(!asymmetricAisleOffsets.Contains(-1 * laneOffsets.Average())) asymmetricAisleOffsets.Add(-1*laneOffsets.Average());
                         }
                     }
                     else
@@ -496,27 +533,33 @@ namespace ParkingLotSnapping
                         {
                             if (Mathf.Abs(laneOffsets[i] - laneOffsets[i - 1]) < roadwayMaxSeperation && offsetAndDirection[laneOffsets[i]] != offsetAndDirection[laneOffsets[i - 1]])
                             {
-                                symetricAisleOffsets.Add((laneOffsets[i] + laneOffsets[i - 1]) / 2f);
-                                asymetricAisleOffsets.Add((laneOffsets[i] + laneOffsets[i - 1]) / 2f);
+                                if (!symmetricAisleOffsets.Contains((laneOffsets[i] + laneOffsets[i - 1]) / 2f))
+                                {
+                                    symmetricAisleOffsets.Add((laneOffsets[i] + laneOffsets[i - 1]) / 2f);
+                                }
+                                if (!asymmetricAisleOffsets.Contains((laneOffsets[i] + laneOffsets[i - 1]) / 2f))
+                                {
+                                    asymmetricAisleOffsets.Add((laneOffsets[i] + laneOffsets[i - 1]) / 2f);
+                                }
                             }
                         }
-                        if (symetricAisleOffsets.Count == 0 && asymetricAisleOffsets.Count == 0)
+                        if (symmetricAisleOffsets.Count == 0 && asymmetricAisleOffsets.Count == 0)
                         {
                             onesided = true;
-                            asymetricAisleOffsets.Add(laneOffsets.Min() + asymetricOffsetAmount);
-                            asymetricAisleOffsets.Add(laneOffsets.Max() - asymetricOffsetAmount);
+                            if (!asymmetricAisleOffsets.Contains(laneOffsets.Min() + asymmetricOffsetAmount)) asymmetricAisleOffsets.Add(laneOffsets.Min() + asymmetricOffsetAmount);
+                            if (!asymmetricAisleOffsets.Contains(laneOffsets.Max() - asymmetricOffsetAmount)) asymmetricAisleOffsets.Add(laneOffsets.Max() - asymmetricOffsetAmount);
                         }
                     }
                     StringBuilder sb = new StringBuilder();
                     sb.Append(info.name);
                     sb.Append(", {");
-                    foreach(float offset in symetricAisleOffsets)
+                    foreach(float offset in symmetricAisleOffsets)
                     {
                         sb.Append(offset.ToString());
                         sb.Append(", ");
                     }
                     sb.Append("}, {");
-                    foreach (float offset in asymetricAisleOffsets)
+                    foreach (float offset in asymmetricAisleOffsets)
                     {
                         sb.Append(offset.ToString());
                         sb.Append(", ");
@@ -525,9 +568,24 @@ namespace ParkingLotSnapping
                     sb.Append(onesided.ToString());
                     sb.Append(", ");
                     sb.Append(invertOffset.ToString());
-                    sb.Append(";");
+                    sb.Append(", False, ");
+                    sb.Append(info.name);
+                    sb.Append(", ");
+                    string filename = info.name;
+                    filename = filename.Replace(".", "-");
+                    filename = filename.Replace("/", " and ");
+                    filename = filename.Replace("°", " deg");
+                    sb.Append(filename);
+                    sb.Append("}");
+                    sb.Append(",");
                     Debug.Log(sb.ToString());
-                    ModSettings.PLRCustomPropertiesClass assetCreatorPLRCustomProperties = new ModSettings.PLRCustomPropertiesClass(symetricAisleOffsets, asymetricAisleOffsets, onesided, invertOffset, false);
+                    if (!ModSettings.PLRCustomProperties.ContainsKey(info.name))
+                    {
+                        ModSettings.PLRCustomPropertiesClass assetCreatorPLRCustomProperties = new ModSettings.PLRCustomPropertiesClass(symmetricAisleOffsets, asymmetricAisleOffsets, onesided, invertOffset, false, info.name, filename, 0f);
+                        Debug.Log("[PLS].PSAai.SnapToOneSide.AssetCreatorMode: Export PLR properties = " + ModSettings.SerializeOnePLR(assetCreatorPLRCustomProperties).ToString());
+                        Debug.Log("[PLS].PSAai.SnapToOneSide.AssetCreatorMode: Import PLR properties = " + ModSettings.DeserializeOnePLR(assetCreatorPLRCustomProperties).ToString());
+                    }
+
                 }
                 ModSettings.lastAssetCreatorModeInfo = info.name;
             }
@@ -542,10 +600,10 @@ namespace ParkingLotSnapping
                     centerDirection.y = 0; //edit for steep slope problem.
                     Vector3 centerDir = centerDirection.normalized;
                     
-                    float parkingOffset = this.m_parkingWidth;
-                    if (PositionLocking.GetLastParkingWidth() > 0 && PositionLocking.GetLastParkingWidth() != this.m_parkingWidth)
+                    float parkingOffset = ModSettings.PSACustomProperties[this.m_info.name].ParkingWidth;
+                    if (PositionLocking.GetLastParkingWidth() > 0 && PositionLocking.GetLastParkingWidth() != ModSettings.PSACustomProperties[this.m_info.name].ParkingWidth)
                     {
-                        parkingOffset = this.m_parkingWidth / 2 + PositionLocking.GetLastParkingWidth() / 2;
+                        parkingOffset = ModSettings.PSACustomProperties[this.m_info.name].ParkingWidth / 2 + PositionLocking.GetLastParkingWidth() / 2;
                         //Debug.Log("[PLS].PSAai Snap to Road Now Parking Offset = " + parkingOffset);
                     }
 
@@ -646,22 +704,22 @@ namespace ParkingLotSnapping
                 {
                     //Debug.Log(info.name);
 
-                    if (this.m_rotation == 0f)
+                    if (ModSettings.PSACustomProperties[this.m_info.name].Rotation == 0f)
                     {
                         Vector3 vector2 = new Vector3(centerDirection.z, 0f, -centerDirection.x);
                         dir = vector2.normalized;
                         offsetDir = dir;
                     }
-                    else if (this.m_rotation == 90f)
+                    else if (ModSettings.PSACustomProperties[this.m_info.name].Rotation == 90f)
                     {
-                        if (logging) Debug.Log("[PLS].PSAai.SnapToOneSide this.m_rotation = " + this.m_rotation.ToString());
+                        if (logging) Debug.Log("[PLS].PSAai.SnapToOneSide this.m_rotation = " + ModSettings.PSACustomProperties[this.m_info.name].Rotation.ToString());
                         Vector3 vector2 = new Vector3(centerDirection.x, 0f, centerDirection.z);
                         dir = vector2.normalized;
                         Vector3 vector3 = new Vector3(centerDirection.z, 0f, -centerDirection.x);
                         offsetDir = vector3.normalized;
-                    } else if (this.m_rotation == 270f)
+                    } else if (ModSettings.PSACustomProperties[this.m_info.name].Rotation == 270f)
                     {
-                        if (logging) Debug.Log("[PLS].PSAai.SnapToOneSide this.m_rotation = " + this.m_rotation.ToString());
+                        if (logging) Debug.Log("[PLS].PSAai.SnapToOneSide this.m_rotation = " + ModSettings.PSACustomProperties[this.m_info.name].Rotation.ToString());
                         Vector3 vector2 = new Vector3(-centerDirection.x, 0f, -centerDirection.z);
                         dir = vector2.normalized;
                         Vector3 vector3 = new Vector3(centerDirection.z, 0f, -centerDirection.x);
@@ -670,9 +728,9 @@ namespace ParkingLotSnapping
                     //now there are two rotations you can't rely on dir being the same direction that you offsite your isle positions.
                    
                     
-                    List<float> PLRasymetricAisleOffsets = ModSettings.PLRCustomProperties[info.name].AsymetricAisleOffsets;
+                    List<float> PLRasymmetricAisleOffsets = ModSettings.PLRCustomProperties[info.name].AsymmetricAisleOffsets;
                     Dictionary<Vector3, Vector3> alternativePositions = new Dictionary<Vector3, Vector3>();
-                    foreach (float aisleOffset in PLRasymetricAisleOffsets)
+                    foreach (float aisleOffset in PLRasymmetricAisleOffsets)
                     {
                         Vector3 alternativeAislePosition = new Vector3();
                        
@@ -682,8 +740,8 @@ namespace ParkingLotSnapping
                         float alternativeAisleDistance = Vector3.Distance(alternativeAislePosition, refPos);
                         if (ModSettings.PLRCustomProperties[info.name].Onesided == false)
                         {
-                            alternativePositions.Add(alternativeAislePosition + offsetDir * this.m_offset, alternativeAislePosition);
-                            alternativePositions.Add(alternativeAislePosition - offsetDir * this.m_offset, alternativeAislePosition);
+                            if (!alternativePositions.ContainsKey(alternativeAislePosition + offsetDir * ModSettings.PSACustomProperties[this.m_info.name].Offset)) alternativePositions.Add(alternativeAislePosition + offsetDir * ModSettings.PSACustomProperties[this.m_info.name].Offset, alternativeAislePosition);
+                            if (!alternativePositions.ContainsKey(alternativeAislePosition - offsetDir * ModSettings.PSACustomProperties[this.m_info.name].Offset)) alternativePositions.Add(alternativeAislePosition - offsetDir * ModSettings.PSACustomProperties[this.m_info.name].Offset, alternativeAislePosition);
                         }
                         else
                         {
@@ -694,7 +752,7 @@ namespace ParkingLotSnapping
                             {
                                 tempDir *= -1;
                             }
-                            alternativePositions.Add(alternativeAislePosition + tempDir * this.m_offset, alternativeAislePosition);
+                            if (!alternativePositions.ContainsKey(alternativeAislePosition + tempDir * ModSettings.PSACustomProperties[this.m_info.name].Offset)) alternativePositions.Add(alternativeAislePosition + tempDir * ModSettings.PSACustomProperties[this.m_info.name].Offset, alternativeAislePosition);
                            
                         }
                     }
@@ -711,18 +769,25 @@ namespace ParkingLotSnapping
                            
                             Vector3 tempDir = alternativePosition.Key - alternativePosition.Value;
                             dir = tempDir.normalized; //may need to be adjusted for asset rotation
-                            if (this.m_rotation == 90f)
+                            if (ModSettings.PSACustomProperties[this.m_info.name].Rotation == 90f)
                             {
                                 Vector3 vector4 = new Vector3(tempDir.z, tempDir.y, -tempDir.x);
                                 dir = vector4.normalized;
-                            } else if (this.m_rotation == 270f)
+                            } else if (ModSettings.PSACustomProperties[this.m_info.name].Rotation == 270f)
                             {
                                 Vector3 vector4 = new Vector3(-tempDir.z, tempDir.y, tempDir.x);
                                 dir = vector4.normalized;
                             }
                         }
                     }
-                    
+                    if (ModSettings.PSACustomProperties[this.m_info.name].Raisable == true)
+                    {
+                        Vector3 centerPos3;
+                        Vector3 centerDirection3;
+                        segments.m_buffer[snappedSegmentID].GetClosestPositionAndDirection(pos, out centerPos3, out centerDirection3);
+                        pos.y = centerPos3.y;
+                    }
+                    pos.y += ModSettings.PLRCustomProperties[info.name].VerticalOffset;
                     result = true;
                     if (!PositionLocking.IsLocked())
                     {
@@ -771,7 +836,7 @@ namespace ParkingLotSnapping
                         PositionLocking.SetSnappedPosition(pos);
                         PositionLocking.SetCenterPosition(centerPos2);
                         PositionLocking.SetCenterDirection(centerDirection2);
-                        PositionLocking.InitiateLock(parkingSpaceAssetAI.m_parkingWidth, parkingSpaceAsset.Info.name);
+                        PositionLocking.InitiateLock(ModSettings.PSACustomProperties[this.m_info.name].ParkingWidth, parkingSpaceAsset.Info.name);
                         //Debug.Log("[PLS]SnapToRoad Snaping to existing asset!");
                     }
                 }
@@ -791,6 +856,11 @@ namespace ParkingLotSnapping
 
         public override string GetConstructionInfo(int productionRate)
         {
+            if (!ModSettings.PSACustomProperties.ContainsKey(this.m_info.name))
+            {
+                Debug.Log("[PLS].PSAai.GetConstructionInfo PSA Custom Properties does not contain " + this.m_info.name);
+                return "";
+            }
             // KEYBIND: Check if undo keybind (whichever it is currently) is pressed
             if (!ModSettings.UndoKeybind.IsPressed()) // When key ot pressed, Undo is reset
             {
@@ -814,37 +884,40 @@ namespace ParkingLotSnapping
                     if ((CurrentUndoTime >= SlowUndoTime) && (UndoCount >= SlowToFastUndoThreshold)) CurrentUndoTime = FastUndoTime; // If undo count surpassed threshold and we're in slow speed, switch to fast speed
                 }
             }
-
+            StringBuilder sb = new StringBuilder();
             if (ModSettings.DisableTooltips)
             {
                 return "";
             }
+            
             if (PositionLocking.IsLocked() && PositionLocking.GetOverlapping() == false)
-            {
+            {   
+                sb.AppendLine("Locked!");
                 if (ModSettings.KeyboardShortcutHints == false)
                 {
-                    return "Locked!";
+                    return sb.ToString();
                 }
-                StringBuilder sb = new StringBuilder();
-                sb.AppendLine("Locked!");
+               
+                
                 // KEYBIND: To obtain current keybind's setting in "string form", just use SavedInputKey.ToLocalizedString("KEYNAME")
                 sb.Append("Press " + ModSettings.UnlockKeybind.ToLocalizedString("KEYNAME") + " to Unlock.");
                 return sb.ToString();
             } else if (PositionLocking.IsLocked())
             {
+                sb.AppendLine("Locked but Overlapping!");
                 if (ModSettings.KeyboardShortcutHints == false)
                 {
-                    return "Locked but Overlapping!";
+                    return sb.ToString();
                 }
-                StringBuilder sb = new StringBuilder();
-                sb.AppendLine("Locked but Overlapping!");
+                
+                
                 sb.AppendLine("Placing a new Parking Space Asset ");
                 if (ModSettings.OverrideOverlapping)
                 {
                     sb.Append("here will override existing.");
                 } else
                 {
-                    sb.Append("here may causes problems latter!");
+                    sb.Append("here may causes problems later!");
                 }
                 return sb.ToString();
             } else if (PositionLocking.canReturnToPreviousLockPosition() && ModSettings.KeyboardShortcutHints == true)
@@ -852,7 +925,22 @@ namespace ParkingLotSnapping
                 // KEYBIND: To obtain current keybind's setting in "string form", just use SavedInputKey.ToLocalizedString("KEYNAME")
                 return "Press " + ModSettings.ReturnLockKeybind.ToLocalizedString("KEYNAME") + " to Re-lock to last locked position.";
             }
-            return "";
+            return sb.ToString();
+        }
+        private void ElevateBuilding(ushort building, ref Building data, Vector3 position, float angle)
+        {
+            BuildingInfo info = data.Info;
+            /*
+            if (info.m_hasParkingSpaces != VehicleInfo.VehicleType.None)
+            {
+                BuildingManager.instance.UpdateParkingSpaces(building, ref data);
+            }*/
+            data.m_position = position;
+            data.m_angle = angle;
+
+           
+            data.CalculateBuilding(building);
+            BuildingManager.instance.UpdateBuildingRenderer(building, true);
         }
     }
 }
