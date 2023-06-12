@@ -18,7 +18,7 @@ namespace ParkingLotSnapping
 
             var oldAI = __instance.gameObject.GetComponent<PrefabAI>();
             //Debug.Log("[PLS]BuildingInfoInitializePrefabPatch oldAI.GetType().fullname = " + oldAI.GetType().FullName);
-            if (oldAI.GetType() == typeof(DummyBuildingAI))
+            if (oldAI.GetType() == typeof(DummyBuildingAI) || oldAI.GetType() == typeof(ParkAI))
             {
                 //Debug.Log("[PLS]BuildingInfoInitializePrefabPatch " + __instance.name +" is DummyBuildingAI");
                 

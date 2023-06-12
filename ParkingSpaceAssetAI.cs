@@ -263,7 +263,7 @@ namespace ParkingLotSnapping
                                     //Debug.Log("[APL].PSAAI.Snap to Road info.m_halfwidth = " + info.m_halfWidth.ToString());
                                     if (distanceToRoad < potentialMaxDistance && ModSettings.PLRCustomProperties.ContainsKey(potentialInfo.name))
                                     {
-                                        if (ModSettings.PSACustomProperties[this.name].Raisable == true || ModSettings.PSACustomProperties[this.name].Raisable == false && potentialInfo.m_netAI is RoadAI)
+                                        if (ModSettings.PSACustomProperties[this.name].Raisable == true || ModSettings.PSACustomProperties[this.name].Raisable == false /*&& potentialInfo.m_netAI is RoadAI*/)
                                         {
                                             potentialMaxDistance = distanceToRoad;
                                             snappedSegmentID = segmentGridZX;
@@ -463,7 +463,7 @@ namespace ParkingLotSnapping
                                     }
                                     if (distanceToRoad < potentialMaxDistance && ModSettings.PLRCustomProperties.ContainsKey(potentialInfo.name) && parallelRoadCheck || distanceToRoad < potentialMaxDistance && ModSettings.AssetCreatorMode == true && ModSettings.unacceptableInfoNames.Contains(potentialInfo.name) == false)
                                     {
-                                        if (ModSettings.PSACustomProperties[this.name].Raisable == true || ModSettings.PSACustomProperties[this.name].Raisable == false && potentialInfo.m_netAI is RoadAI || ModSettings.AssetCreatorMode == true)
+                                        if (ModSettings.PSACustomProperties[this.name].Raisable == true || ModSettings.PSACustomProperties[this.name].Raisable == false /*&& potentialInfo.m_netAI is RoadAI*/ || ModSettings.AssetCreatorMode == true)
                                         {
                                             potentialMaxDistance = distanceToRoad;
                                             snappedSegmentID = segmentGridZX;
@@ -582,6 +582,7 @@ namespace ParkingLotSnapping
                     if (!ModSettings.PLRCustomProperties.ContainsKey(info.name))
                     {
                         ModSettings.PLRCustomPropertiesClass assetCreatorPLRCustomProperties = new ModSettings.PLRCustomPropertiesClass(symmetricAisleOffsets, asymmetricAisleOffsets, onesided, invertOffset, false, info.name, filename, 0f);
+                        
                         Debug.Log("[PLS].PSAai.SnapToOneSide.AssetCreatorMode: Export PLR properties = " + ModSettings.SerializeOnePLR(assetCreatorPLRCustomProperties).ToString());
                         Debug.Log("[PLS].PSAai.SnapToOneSide.AssetCreatorMode: Import PLR properties = " + ModSettings.DeserializeOnePLR(assetCreatorPLRCustomProperties).ToString());
                     }
@@ -717,7 +718,15 @@ namespace ParkingLotSnapping
                         dir = vector2.normalized;
                         Vector3 vector3 = new Vector3(centerDirection.z, 0f, -centerDirection.x);
                         offsetDir = vector3.normalized;
-                    } else if (ModSettings.PSACustomProperties[this.m_info.name].Rotation == 270f)
+
+                    }
+                    else if (ModSettings.PSACustomProperties[this.m_info.name].Rotation == 180f)
+                    {
+                        Vector3 vector2 = new Vector3(-centerDirection.z, 0f, centerDirection.x);
+                        dir = vector2.normalized;
+                        offsetDir = dir;
+                    }
+                    else if (ModSettings.PSACustomProperties[this.m_info.name].Rotation == 270f)
                     {
                         if (logging) Debug.Log("[PLS].PSAai.SnapToOneSide this.m_rotation = " + ModSettings.PSACustomProperties[this.m_info.name].Rotation.ToString());
                         Vector3 vector2 = new Vector3(-centerDirection.x, 0f, -centerDirection.z);
@@ -773,7 +782,13 @@ namespace ParkingLotSnapping
                             {
                                 Vector3 vector4 = new Vector3(tempDir.z, tempDir.y, -tempDir.x);
                                 dir = vector4.normalized;
-                            } else if (ModSettings.PSACustomProperties[this.m_info.name].Rotation == 270f)
+                            }
+                            else if (ModSettings.PSACustomProperties[this.m_info.name].Rotation == 180f)
+                            {
+                                Vector3 vector4 = new Vector3(-tempDir.x, tempDir.y, -tempDir.z);
+                                dir = vector4.normalized;
+                            }
+                            else if (ModSettings.PSACustomProperties[this.m_info.name].Rotation == 270f)
                             {
                                 Vector3 vector4 = new Vector3(-tempDir.z, tempDir.y, tempDir.x);
                                 dir = vector4.normalized;
